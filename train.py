@@ -12,6 +12,10 @@ import time
 import datetime
 import math
 from models.retinaface import RetinaFace
+from matplotlib import pyplot as plt
+import numpy as np
+import config_logger
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser(description='Retinaface Training')
 parser.add_argument('--training_dataset', default='./data/widerface/train/label.txt', help='Training dataset directory')
@@ -26,6 +30,8 @@ parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for S
 parser.add_argument('--save_folder', default='./weights/', help='Location to save checkpoint models')
 
 args = parser.parse_args()
+
+logger = config_logger.logger_config('train.txt')
 
 if not os.path.exists(args.save_folder):
     os.mkdir(args.save_folder)
@@ -52,8 +58,8 @@ training_dataset = args.training_dataset
 save_folder = args.save_folder
 
 net = RetinaFace(cfg=cfg)
-print("Printing net...")
-print(net)
+# print("Printing net...")
+# print(net)
 
 if args.resume_net is not None:
     print('Loading resume network...')
@@ -103,7 +109,73 @@ def train():
         start_iter = args.resume_epoch * epoch_size
     else:
         start_iter = 0
-    for iteration in range(start_iter, max_iter):
+    loss_values2 =[]
+    loss_values1 = []
+    llv1 = []
+    llv2 = []
+    lcv1 = []
+    lcv2 = []
+    llmv1 = []
+    llmv2 = []
+    i=0
+    training = tqdm(range(start_iter, max_iter), desc=f'Epoch: {epoch+1}')
+    for iteration in training:
+        # print('Epoch: ', epoch+1)
+        if iteration % epoch_size == 0:
+            training.set_description(f'Epoch: {epoch+1}')
+            if i != 0:
+                temp_loss_values = sum(loss_values1) / len(loss_values1)
+                temp_llv = sum(llv1) / len(llv1)
+                temp_lcv = sum(lcv1) / len(lcv1)
+                temp_llmv = sum(llmv1) / len(llmv1)
+                loss_values2.append(temp_loss_values)
+                llv2.append(temp_llv)
+                config_logger.empty_var_logger('llv1', llv1)
+                print('localization loss: ', temp_llv)
+                print('classification loss: ', temp_lcv)
+                print('landmark loss: ', temp_llmv)
+                print('total loss: ', temp_loss_values)
+                lcv2.append(temp_lcv)
+                llmv2.append(temp_llmv)
+                loss_values1 = []
+                llv1 = []
+                lcv1 = []
+                llmv1 = []
+                print(loss_values2)
+                np.savetxt('loss_values.txt', loss_values2)
+                np.savetxt('localization_loss.txt', llv2)
+                np.savetxt('classification_loss.txt', lcv2)
+                np.savetxt('landmark_loss.txt', llmv2)
+                
+                plt.plot(loss_values2)
+                plt.title('Total loss')
+                plt.xlabel('Epoch')
+                plt.ylabel('Loss')
+                plt.savefig('loss.png')
+                plt.cla()
+                
+                plt.plot(llv2)
+                plt.title('Localization loss')
+                plt.xlabel('Epoch')
+                plt.ylabel('Loss')
+                plt.savefig('localization_loss.png')
+                plt.cla()
+                
+                plt.plot(lcv2)
+                plt.title('Classification loss')
+                plt.xlabel('Epoch')
+                plt.ylabel('Loss')
+                plt.savefig('classification_loss.png')
+                plt.cla()
+                
+                plt.plot(llmv2)
+                plt.title('Landmark loss')
+                plt.xlabel('Epoch')
+                plt.ylabel('Loss')
+                plt.savefig('landmark_loss.png')
+                plt.cla()
+            i = 0
+        i+=1
         if iteration % epoch_size == 0:
             # create batch iterator
             batch_iterator = iter(data.DataLoader(dataset, batch_size, shuffle=True, num_workers=num_workers, collate_fn=detection_collate))
@@ -111,7 +183,7 @@ def train():
                 print('Saving final model...')
                 torch.save(net.state_dict(), save_folder + cfg['name']+ '_epoch_' + str(epoch) + '.pth')
             epoch += 1
-
+        
         load_t0 = time.time()
         if iteration in stepvalues:
             step_index += 1
@@ -134,10 +206,22 @@ def train():
         load_t1 = time.time()
         batch_time = load_t1 - load_t0
         eta = int(batch_time * (max_iter - iteration))
-        print('Epoch:{}/{} || Epochiter: {}/{} || Iter: {}/{} || Loc: {:.4f} Cla: {:.4f} Landm: {:.4f} || LR: {:.8f} || Batchtime: {:.4f} s || ETA: {}'
-              .format(epoch, max_epoch, (iteration % epoch_size) + 1,
-              epoch_size, iteration + 1, max_iter, loss_l.item(), loss_c.item(), loss_landm.item(), lr, batch_time, str(datetime.timedelta(seconds=eta))))
+        # print(loss_values1)
+        loss_values1.append(loss.item())
+        llv1.append(loss_l.item())
+        lcv1.append(loss_c.item())
+        llmv1.append(loss_landm.item())
+        # print('total: ',loss_values1)
+        # print('localization: ',llv1)
+        # print('Epoch:{}/{} || Epochiter: {}/{} || Iter: {}/{} || Loc: {:.4f} Cla: {:.4f} Landm: {:.4f} || LR: {:.8f} || Batchtime: {:.4f} s || ETA: {}'
+            # .format(epoch, max_epoch, (iteration % epoch_size) + 1,
+            # epoch_size, iteration + 1, max_iter, loss_l.item(), loss_c.item(), loss_landm.item(), lr, batch_time, str(datetime.timedelta(seconds=eta))))
+    logger.info(llv2)
+    logger.info(sum(llv1))
+    logger.info(len(llv1))
+    logger.info(sum(llv1) / len(llv1))
     torch.save(net.state_dict(), save_folder + cfg['name'] + '_Final.pth')
+    # plt.show()
     # torch.save(net.state_dict(), save_folder + 'Final_Retinaface.pth')
 
 
@@ -156,4 +240,5 @@ def adjust_learning_rate(optimizer, gamma, epoch, step_index, iteration, epoch_s
     return lr
 
 if __name__ == '__main__':
+    logger.info('Start training...')
     train()
