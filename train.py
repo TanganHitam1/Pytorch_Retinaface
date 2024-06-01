@@ -124,7 +124,7 @@ logger.info('Learning rate: ' + str(initial_lr))
 logger.info('Optimizer: ' + optimizer.__class__.__name__)
 
 curve_path = f'./curve//b{batch_size}/lr{initial_lr}/opt{optimizer.__class__.__name__}'
-weight_path = f'./weights/b{batch_size}/lr{initial_lr}/opt{optimizer.__class__.__name__}'
+weight_path = f'./weights/b{batch_size}/lr{initial_lr}/opt{optimizer.__class__.__name__}/'
 
 if not os.path.exists(curve_path):
     os.makedirs(curve_path)
@@ -174,7 +174,7 @@ def train():
                 print('classification loss: ', temp_lcv)
                 print('landmark loss: ', temp_llmv)
                 print('total loss: ', temp_loss_values)
-                print('learning rate: ', lr)
+                # print('learning rate: ', lr)
                 lcv2.append(temp_lcv)
                 llmv2.append(temp_llmv)
                 loss_values1 = []
