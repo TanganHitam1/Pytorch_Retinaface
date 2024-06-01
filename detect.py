@@ -14,9 +14,9 @@ import time
 
 parser = argparse.ArgumentParser(description='Retinaface')
 
-parser.add_argument('-m', '--trained_model', default='./weights/Resnet50_Final.pth',
+parser.add_argument('-m', '--trained_model', default='./weights/mobilenet0.25_Final.pth',
                     type=str, help='Trained state_dict file path to open')
-parser.add_argument('--network', default='resnet50', help='Backbone network mobile0.25 or resnet50')
+parser.add_argument('--network', default='mobile0.25', help='Backbone network mobile0.25 or resnet50')
 parser.add_argument('--cpu', action="store_true", default=False, help='Use cpu inference')
 parser.add_argument('--confidence_threshold', default=0.02, type=float, help='confidence_threshold')
 parser.add_argument('--top_k', default=5000, type=int, help='top_k')
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     net = load_model(net, args.trained_model, args.cpu)
     net.eval()
     print('Finished loading model!')
-    print(net)
+    # print(net)
     cudnn.benchmark = True
     device = torch.device("cpu" if args.cpu else "cuda")
     net = net.to(device)

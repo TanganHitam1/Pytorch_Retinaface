@@ -11,12 +11,13 @@ import cv2
 from models.retinaface import RetinaFace
 from utils.box_utils import decode, decode_landm
 from utils.timer import Timer
+import config_logger
 
 
 parser = argparse.ArgumentParser(description='Retinaface')
-parser.add_argument('-m', '--trained_model', default='./weights/Resnet50_Final.pth',
+parser.add_argument('-m', '--trained_model', default='./weights/mobilenet0.25_Final.pth',
                     type=str, help='Trained state_dict file path to open')
-parser.add_argument('--network', default='resnet50', help='Backbone network mobile0.25 or resnet50')
+parser.add_argument('--network', default='mobile0.25', help='Backbone network mobile0.25 or resnet50')
 parser.add_argument('--origin_size', default=True, type=str, help='Whether use origin image size to evaluate')
 parser.add_argument('--save_folder', default='./widerface_evaluate/widerface_txt/', type=str, help='Dir to save txt results')
 parser.add_argument('--cpu', action="store_true", default=False, help='Use cpu inference')
@@ -29,6 +30,7 @@ parser.add_argument('-s', '--save_image', action="store_true", default=False, he
 parser.add_argument('--vis_thres', default=0.5, type=float, help='visualization_threshold')
 args = parser.parse_args()
 
+logger = config_logger.logger_config('test.txt')
 
 def check_keys(model, pretrained_state_dict):
     ckpt_keys = set(pretrained_state_dict.keys())
@@ -79,7 +81,7 @@ if __name__ == '__main__':
     net = load_model(net, args.trained_model, args.cpu)
     net.eval()
     print('Finished loading model!')
-    print(net)
+    # print(net)
     cudnn.benchmark = True
     device = torch.device("cpu" if args.cpu else "cuda")
     net = net.to(device)
@@ -89,8 +91,11 @@ if __name__ == '__main__':
     testset_list = args.dataset_folder[:-7] + "wider_val.txt"
 
     with open(testset_list, 'r') as fr:
-        test_dataset = fr.read().split()
+        test_dataset = fr.read()
+    test_dataset = test_dataset.split()
+    test_dataset = [img_name for img_name in test_dataset if img_name.endswith('.jpg')]  # Filter only .jpg files
     num_images = len(test_dataset)
+    logger.info(f"Test dataset: {test_dataset}.")
 
     _t = {'forward_pass': Timer(), 'misc': Timer()}
 
