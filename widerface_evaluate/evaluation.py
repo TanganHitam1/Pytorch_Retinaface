@@ -13,6 +13,8 @@ import numpy as np
 from scipy.io import loadmat
 from box_overlaps import bbox_overlaps
 from IPython import embed
+import matplotlib.pyplot as plt
+
 
 
 def get_gt_boxes(gt_dir):
@@ -223,6 +225,15 @@ def voc_ap(rec, prec):
     ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
     return ap
 
+def plot_pr_curve(rec, prec, title):
+    plt.figure()
+    plt.plot(rec, prec, lw=2)
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title(f'Precision-Recall curve for {title}')
+    plt.grid(True)
+    plt.savefig(f'{title}_pr_curve.png')
+    plt.close()
 
 def evaluation(pred, gt_path, iou_thresh=0.5):
     pred = get_preds(pred)
@@ -238,6 +249,7 @@ def evaluation(pred, gt_path, iou_thresh=0.5):
         gt_list = setting_gts[setting_id]
         count_face = 0
         pr_curve = np.zeros((thresh_num, 2)).astype('float')
+        
         # [hard, medium, easy]
         pbar = tqdm.tqdm(range(event_num))
         for i in pbar:
@@ -270,6 +282,7 @@ def evaluation(pred, gt_path, iou_thresh=0.5):
 
         propose = pr_curve[:, 0]
         recall = pr_curve[:, 1]
+        plot_pr_curve(recall, propose, settings[setting_id])
 
         ap = voc_ap(recall, propose)
         aps.append(ap)
