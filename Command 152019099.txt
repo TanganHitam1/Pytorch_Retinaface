@@ -9,8 +9,4 @@ python train.py --network mobile0.25 --resume_net Namanya --resume_epoch nomorny
 
 python detect.py --network mobile0.25 --trained_model ./weights/mobilenet0.25_Final.pth
 
-
-cd D:\TA-152019099\Pytorch_Retinaface2
-D:
-conda activate retinaface
-python train.py --network resnet50
+python train.py --lr 1e-2

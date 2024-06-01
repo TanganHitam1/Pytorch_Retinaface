@@ -28,10 +28,11 @@ parser.add_argument('--resume_epoch', default=0, type=int, help='resume iter for
 parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
 parser.add_argument('--save_folder', default='./weights/', help='Location to save checkpoint models')
+parser.add_argument('--batch_size', default=4, type=int, help='Batch size for training')
+parser.add_argument('--optimizer', default='sgd', help='Optimizer for training')
 
 args = parser.parse_args()
 
-logger = config_logger.logger_config('train.txt')
 
 if not os.path.exists(args.save_folder):
     os.mkdir(args.save_folder)
@@ -45,12 +46,13 @@ rgb_mean = (104, 117, 123) # bgr order
 num_classes = 2
 img_dim = cfg['image_size']
 num_gpu = cfg['ngpu']
-batch_size = cfg['batch_size']
+batch_size = args.batch_size
 max_epoch = cfg['epoch']
 gpu_train = cfg['gpu_train']
 
 num_workers = args.num_workers
 momentum = args.momentum
+
 weight_decay = args.weight_decay
 initial_lr = args.lr
 gamma = args.gamma
@@ -83,14 +85,51 @@ else:
 
 cudnn.benchmark = True
 
+if args.optimizer == 'adam':
+    optimizer = optim.Adam(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
+elif args.optimizer == 'sgd':
+    optimizer = optim.SGD(net.parameters(), lr=initial_lr, momentum=momentum, weight_decay=weight_decay)
+elif args.optimizer == 'adamax':
+    optimizer = optim.Adamax(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
+elif args.optimizer == 'adadelta':
+    optimizer = optim.Adadelta(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
+elif args.optimizer == 'adagrad':
+    optimizer = optim.Adagrad(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
+elif args.optimizer == 'rmsprop':
+    optimizer = optim.RMSprop(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
+elif args.optimizer == 'adamw':
+    optimizer = optim.AdamW(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
+elif args.optimizer == 'lbfgs':
+    optimizer = optim.LBFGS(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
+elif args.optimizer == 'rprop':
+    optimizer = optim.Rprop(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
+elif args.optimizer == 'asgd':
+    optimizer = optim.ASGD(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
+else:
+    raise ValueError('Invalid optimizer')
 
-optimizer = optim.SGD(net.parameters(), lr=initial_lr, momentum=momentum, weight_decay=weight_decay)
+# # optimizer = optim.SGD(net.parameters(), lr=initial_lr, momentum=momentum, weight_decay=weight_decay)
 criterion = MultiBoxLoss(num_classes, 0.35, True, 0, True, 7, 0.35, False)
+
 
 priorbox = PriorBox(cfg, image_size=(img_dim, img_dim))
 with torch.no_grad():
     priors = priorbox.forward()
     priors = priors.cuda()
+
+logger = config_logger.logger_config(f'./log/train_b{batch_size}_lr{initial_lr}_opt{optimizer.__class__.__name__}.txt')
+logger.info('Start training...')
+logger.info('Batch size: ' + str(batch_size))
+logger.info('Learning rate: ' + str(initial_lr))
+logger.info('Optimizer: ' + optimizer.__class__.__name__)
+
+curve_path = f'./curve//b{batch_size}/lr{initial_lr}/opt{optimizer.__class__.__name__}'
+weight_path = f'./weights/b{batch_size}/lr{initial_lr}/opt{optimizer.__class__.__name__}'
+
+if not os.path.exists(curve_path):
+    os.makedirs(curve_path)
+if not os.path.exists(weight_path):
+    os.makedirs(weight_path)
 
 def train():
     net.train()
@@ -130,58 +169,59 @@ def train():
                 temp_llmv = sum(llmv1) / len(llmv1)
                 loss_values2.append(temp_loss_values)
                 llv2.append(temp_llv)
-                config_logger.empty_var_logger('llv1', llv1)
+                # config_logger.empty_var_logger('llv1', llv1)
                 print('localization loss: ', temp_llv)
                 print('classification loss: ', temp_lcv)
                 print('landmark loss: ', temp_llmv)
                 print('total loss: ', temp_loss_values)
+                print('learning rate: ', lr)
                 lcv2.append(temp_lcv)
                 llmv2.append(temp_llmv)
                 loss_values1 = []
                 llv1 = []
                 lcv1 = []
                 llmv1 = []
-                print(loss_values2)
-                np.savetxt('loss_values.txt', loss_values2)
-                np.savetxt('localization_loss.txt', llv2)
-                np.savetxt('classification_loss.txt', lcv2)
-                np.savetxt('landmark_loss.txt', llmv2)
+                # print(loss_values2)
+                np.savetxt(f'{curve_path}/loss_values_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', loss_values2)
+                np.savetxt(f'{curve_path}/localization_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', llv2)
+                np.savetxt(f'{curve_path}/classification_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', lcv2)
+                np.savetxt(f'{curve_path}/landmark_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', llmv2)
                 
                 plt.plot(loss_values2)
                 plt.title('Total loss')
                 plt.xlabel('Epoch')
                 plt.ylabel('Loss')
-                plt.savefig('loss.png')
+                plt.savefig(f'{curve_path}/loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.png')
                 plt.cla()
                 
                 plt.plot(llv2)
                 plt.title('Localization loss')
                 plt.xlabel('Epoch')
                 plt.ylabel('Loss')
-                plt.savefig('localization_loss.png')
+                plt.savefig(f'{curve_path}/localization_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.png')
                 plt.cla()
                 
                 plt.plot(lcv2)
                 plt.title('Classification loss')
                 plt.xlabel('Epoch')
                 plt.ylabel('Loss')
-                plt.savefig('classification_loss.png')
+                plt.savefig(f'{curve_path}/classification_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.png')
                 plt.cla()
                 
                 plt.plot(llmv2)
                 plt.title('Landmark loss')
                 plt.xlabel('Epoch')
                 plt.ylabel('Loss')
-                plt.savefig('landmark_loss.png')
+                plt.savefig(f'{curve_path}/landmark_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.png')
                 plt.cla()
             i = 0
         i+=1
         if iteration % epoch_size == 0:
             # create batch iterator
             batch_iterator = iter(data.DataLoader(dataset, batch_size, shuffle=True, num_workers=num_workers, collate_fn=detection_collate))
-            if (epoch % 5 == 0 and epoch > 0) or (epoch % 5 == 0 and epoch > cfg['decay1']):
-                print('Saving final model...')
-                torch.save(net.state_dict(), save_folder + cfg['name']+ '_epoch_' + str(epoch) + '.pth')
+            if (epoch % 10 == 0 and epoch > 0) or (epoch % 10 == 0 and epoch > cfg['decay1']):
+                print(f'Saving model at epcoch: {epoch}')
+                torch.save(net.state_dict(), weight_path + cfg['name']+ '_epoch_' + str(epoch) + '_b' + str(batch_size) + '_lr' + str(lr) + '_opt' + str(optimizer.__class__.__name__) +'.pth')
             epoch += 1
         
         load_t0 = time.time()
@@ -220,7 +260,7 @@ def train():
     logger.info(sum(llv1))
     logger.info(len(llv1))
     logger.info(sum(llv1) / len(llv1))
-    torch.save(net.state_dict(), save_folder + cfg['name'] + '_Final.pth')
+    torch.save(net.state_dict(), weight_path + cfg['name'] + '_b' + batch_size + '_lr' + lr + '_opt' + optimizer.__class__.__name__ +'_Final.pth')
     # plt.show()
     # torch.save(net.state_dict(), save_folder + 'Final_Retinaface.pth')
 
