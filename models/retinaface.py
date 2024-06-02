@@ -85,7 +85,7 @@ class RetinaFace(nn.Module):
         self.ClassHead = self._make_class_head(fpn_num=3, inchannels=cfg['out_channel'])
         self.BboxHead = self._make_bbox_head(fpn_num=3, inchannels=cfg['out_channel'])
         self.LandmarkHead = self._make_landmark_head(fpn_num=3, inchannels=cfg['out_channel'])
-        self.vertices_head = self._make_vertices_head(68*3)  # num_vertices is the number of vertices in your 3D face mesh
+        # self.vertices_head = self._make_vertices_head(68*3)  # num_vertices is the number of vertices in your 3D face mesh
 
 
     def _make_class_head(self,fpn_num=3,inchannels=64,anchor_num=2):
@@ -106,13 +106,13 @@ class RetinaFace(nn.Module):
             landmarkhead.append(LandmarkHead(inchannels,anchor_num))
         return landmarkhead
     
-    def _make_vertices_head(self, out_planes):
-        layers = []
-        for _ in range(cfg['head']['layer_nums']):
-            layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-                    nn.ReLU(inplace=True)]
-        layers += [nn.Conv2d(256, out_planes, kernel_size=3, stride=1, padding=1)]
-        return nn.Sequential(*layers)
+    # def _make_vertices_head(self, out_planes):
+    #     layers = []
+    #     for _ in range(cfg['head']['layer_nums']):
+    #         layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+    #                 nn.ReLU(inplace=True)]
+    #     layers += [nn.Conv2d(256, out_planes, kernel_size=3, stride=1, padding=1)]
+    #     return nn.Sequential(*layers)
 
     def forward(self,inputs):
         out = self.body(inputs)
