@@ -136,6 +136,8 @@ epoch = 0 + args.resume_epoch
 def train():
     net.train()
     print('Loading Dataset...')
+    
+    epoch = int(epoch)
 
     dataset = WiderFaceDetection( training_dataset,preproc(img_dim, rgb_mean))
 

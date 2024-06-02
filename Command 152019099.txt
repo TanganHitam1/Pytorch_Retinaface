@@ -7,7 +7,7 @@ python train.py --network mobile0.25
 
 # done python train.py
 
-python train.py --optimizer adam --lr 1e-4
+python train.py --optimizer adam
 
 python train.py --optimizer adadelta
 
