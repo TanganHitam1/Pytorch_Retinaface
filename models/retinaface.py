@@ -93,7 +93,7 @@ class RetinaFace(nn.Module):
         for i in range(fpn_num):
             classhead.append(ClassHead(inchannels,anchor_num))
         return classhead
-    
+
     def _make_bbox_head(self,fpn_num=3,inchannels=64,anchor_num=2):
         bboxhead = nn.ModuleList()
         for i in range(fpn_num):
@@ -105,7 +105,7 @@ class RetinaFace(nn.Module):
         for i in range(fpn_num):
             landmarkhead.append(LandmarkHead(inchannels,anchor_num))
         return landmarkhead
-    
+
     # def _make_vertices_head(self, out_planes):
     #     layers = []
     #     for _ in range(cfg['head']['layer_nums']):
