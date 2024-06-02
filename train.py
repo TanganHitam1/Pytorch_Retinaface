@@ -100,9 +100,9 @@ elif args.optimizer == 'rmsprop':
 elif args.optimizer == 'adamw':
     optimizer = optim.AdamW(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
 elif args.optimizer == 'lbfgs':
-    optimizer = optim.LBFGS(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
+    optimizer = optim.LBFGS(net.parameters(), lr=initial_lr)
 elif args.optimizer == 'rprop':
-    optimizer = optim.Rprop(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
+    optimizer = optim.Rprop(net.parameters(), lr=initial_lr)
 elif args.optimizer == 'asgd':
     optimizer = optim.ASGD(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
 else:
