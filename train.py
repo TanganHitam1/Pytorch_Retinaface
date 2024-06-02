@@ -20,7 +20,7 @@ from tqdm import tqdm
 parser = argparse.ArgumentParser(description='Retinaface Training')
 parser.add_argument('--training_dataset', default='./data/widerface/train/label.txt', help='Training dataset directory')
 parser.add_argument('--network', default='mobile0.25', help='Backbone network mobile0.25 or resnet50')
-parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
+parser.add_argument('--num_workers', default=1, type=int, help='Number of workers used in dataloading')
 parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--resume_net', default=None, help='resume net for retraining')
@@ -117,14 +117,16 @@ with torch.no_grad():
     priors = priorbox.forward()
     priors = priors.cuda()
 
-logger = config_logger.logger_config(f'./log/train_b{batch_size}_lr{initial_lr}_opt{optimizer.__class__.__name__}.txt')
+name = cfg['name']
+
+logger = config_logger.logger_config(f'./log/{name}_train_b{batch_size}_lr{initial_lr}_opt{optimizer.__class__.__name__}.txt')
 logger.info('Start training...')
 logger.info('Batch size: ' + str(batch_size))
 logger.info('Learning rate: ' + str(initial_lr))
 logger.info('Optimizer: ' + optimizer.__class__.__name__)
 
-curve_path = f'./curve//b{batch_size}/lr{initial_lr}/opt{optimizer.__class__.__name__}'
-weight_path = f'./weights/b{batch_size}/lr{initial_lr}/opt{optimizer.__class__.__name__}/'
+curve_path = f'./curve/{name}/b{batch_size}/lr{initial_lr}/opt{optimizer.__class__.__name__}'
+weight_path = f'./weights/{name}/b{batch_size}/lr{initial_lr}/opt{optimizer.__class__.__name__}/'
 
 if not os.path.exists(curve_path):
     os.makedirs(curve_path)
@@ -133,7 +135,7 @@ if not os.path.exists(weight_path):
 
 epoch = 0 + args.resume_epoch
 
-def train():
+def train(epoch):
     net.train()
     print('Loading Dataset...')
 
@@ -286,7 +288,7 @@ def adjust_learning_rate(optimizer, gamma, epoch, step_index, iteration, epoch_s
 if __name__ == '__main__':
     logger.info('Start training...')
     try:
-        epoch = train()
+        epoch = train(epoch)
     except KeyboardInterrupt:
         torch.save(net.state_dict(), weight_path + cfg['name'] + '_b' + batch_size + '_lr' + initial_lr + '_opt' + optimizer.__class__.__name__ +'_Final.pth')
         logger.info('Training stopped by user...')
