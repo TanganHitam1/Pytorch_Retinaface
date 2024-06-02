@@ -131,9 +131,10 @@ if not os.path.exists(curve_path):
 if not os.path.exists(weight_path):
     os.makedirs(weight_path)
 
+epoch = 0 + args.resume_epoch
+
 def train():
     net.train()
-    epoch = 0 + args.resume_epoch
     print('Loading Dataset...')
 
     dataset = WiderFaceDetection( training_dataset,preproc(img_dim, rgb_mean))
@@ -162,6 +163,7 @@ def train():
         # print('Epoch: ', epoch+1)
         if iteration % epoch_size == 0:
             training.set_description(f'Epoch: {epoch+1}')
+            logger.info(f'Epoch: {epoch+1}')
             if i != 0:
                 temp_loss_values = sum(loss_values1) / len(loss_values1)
                 temp_llv = sum(llv1) / len(llv1)
@@ -223,7 +225,7 @@ def train():
                 print(f'Saving model at epcoch: {epoch}')
                 torch.save(net.state_dict(), weight_path + cfg['name']+ '_epoch_' + str(epoch) + '_b' + str(batch_size) + '_lr' + str(lr) + '_opt' + str(optimizer.__class__.__name__) +'.pth')
             epoch += 1
-        
+
         load_t0 = time.time()
         if iteration in stepvalues:
             step_index += 1
@@ -260,7 +262,9 @@ def train():
     logger.info(sum(llv1))
     logger.info(len(llv1))
     logger.info(sum(llv1) / len(llv1))
+    logger.info("Training complete...")
     torch.save(net.state_dict(), weight_path + cfg['name'] + '_b' + batch_size + '_lr' + lr + '_opt' + optimizer.__class__.__name__ +'_Final.pth')
+    return epoch
     # plt.show()
     # torch.save(net.state_dict(), save_folder + 'Final_Retinaface.pth')
 
@@ -281,4 +285,16 @@ def adjust_learning_rate(optimizer, gamma, epoch, step_index, iteration, epoch_s
 
 if __name__ == '__main__':
     logger.info('Start training...')
-    train()
+    try:
+        epoch = train()
+    except KeyboardInterrupt:
+        torch.save(net.state_dict(), weight_path + cfg['name'] + '_b' + batch_size + '_lr' + initial_lr + '_opt' + optimizer.__class__.__name__ +'_Final.pth')
+        logger.info('Training stopped by user...')
+        print('Training stopped by user...')
+        plt.show()
+        exit()
+    except Exception as e:
+        logger.error(e)
+        print(e)
+        logger.info('Training stopped by error at epoch: ' + str(epoch))
+        exit()

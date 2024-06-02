@@ -5,8 +5,31 @@ D:
 conda activate retinaface
 python train.py --network mobile0.25
 
-python train.py --network mobile0.25 --resume_net Namanya --resume_epoch nomornya
+# done python train.py
 
-python detect.py --network mobile0.25 --trained_model ./weights/mobilenet0.25_Final.pth
+python train.py --optimizer adam --lr 1e-4
 
-python train.py --lr 1e-2
+python train.py --optimizer adadelta
+
+python train.py --optimizer adagrad
+
+python train.py --optimizer rmsprop
+
+python train.py --optimizer lbfgs
+
+python train.py --optimizer rprop
+
+
+python train.py --batch_size 2
+
+python train.py --optimizer adam --batch_size 2
+
+python train.py --optimizer adadelta --batch_size 2
+
+python train.py --optimizer adagrad --batch_size 2
+
+python train.py --optimizer rmsprop --batch_size 2
+
+python train.py --optimizer lbfgs --batch_size 2
+
+python train.py --optimizer rprop --batch_size 2
