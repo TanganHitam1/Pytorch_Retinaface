@@ -89,13 +89,13 @@ class MultiBoxLoss(nn.Module):
         pos = conf_t != zeros
         conf_t[pos] = 1
         
-        pos_v = conf_t > zeros
-        num_pos_v = pos_v.long().sum(1, keepdim=True)
-        N_v = max(num_pos_v.data.sum().float(), 1)
-        pos_idx_v = pos_v.unsqueeze(pos_v.dim()).expand_as(vertices_data)
-        vertices_p = vertices_data[pos_idx_v].view(-1, num_vertices*3)
-        vertices_t = vertices_t[pos_idx_v].view(-1, num_vertices*3)
-        loss_v = F.smooth_l1_loss(vertices_p, vertices_t, reduction='sum')
+        # pos_v = conf_t > zeros
+        # num_pos_v = pos_v.long().sum(1, keepdim=True)
+        # N_v = max(num_pos_v.data.sum().float(), 1)
+        # pos_idx_v = pos_v.unsqueeze(pos_v.dim()).expand_as(vertices_data)
+        # vertices_p = vertices_data[pos_idx_v].view(-1, num_vertices*3)
+        # vertices_t = vertices_t[pos_idx_v].view(-1, num_vertices*3)
+        # loss_v = F.smooth_l1_loss(vertices_p, vertices_t, reduction='sum')
 
 
         # Localization Loss (Smooth L1)

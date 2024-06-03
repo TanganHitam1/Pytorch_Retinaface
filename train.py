@@ -64,6 +64,7 @@ net = RetinaFace(cfg=cfg)
 # print(net)
 
 if args.resume_net is not None:
+    lr = 1e-4
     print('Loading resume network...')
     state_dict = torch.load(args.resume_net)
     # create new OrderedDict that does not contain `module.`
@@ -136,12 +137,13 @@ if not os.path.exists(weight_path):
 epoch = 0 + args.resume_epoch
 
 def train(epoch):
+    
     net.train()
     print('Loading Dataset...')
     
     epoch = int(epoch)
 
-    dataset = WiderFaceDetection( training_dataset,preproc(img_dim, rgb_mean))
+    dataset = WiderFaceDetection(training_dataset,preproc(img_dim, rgb_mean))
 
     epoch_size = math.ceil(len(dataset) / batch_size)
     max_iter = max_epoch * epoch_size
@@ -151,6 +153,11 @@ def train(epoch):
 
     if args.resume_epoch > 0:
         start_iter = args.resume_epoch * epoch_size
+        text = args.resume_net.split('/')[-1]
+        text = text.split('_')[-2]
+        # print(text)
+        lr = float(text[2:])
+        # print(lr)
     else:
         start_iter = 0
     loss_values2 =[]
@@ -267,7 +274,7 @@ def train(epoch):
     logger.info(len(llv1))
     logger.info(sum(llv1) / len(llv1))
     logger.info("Training complete...")
-    torch.save(net.state_dict(), weight_path + cfg['name'] + '_b' + batch_size + '_lr' + lr + '_opt' + optimizer.__class__.__name__ +'_Final.pth')
+    torch.save(net.state_dict(), weight_path + cfg['name'] + '_b' + str(batch_size) + '_lr' + str(lr) + '_opt' + optimizer.__class__.__name__ +'_Final.pth')
     return epoch
     # plt.show()
     # torch.save(net.state_dict(), save_folder + 'Final_Retinaface.pth')
@@ -292,7 +299,7 @@ if __name__ == '__main__':
     try:
         epoch = train(epoch)
     except KeyboardInterrupt:
-        torch.save(net.state_dict(), weight_path + cfg['name'] + '_b' + batch_size + '_lr' + initial_lr + '_opt' + optimizer.__class__.__name__ +'_Final.pth')
+        torch.save(net.state_dict(), weight_path + cfg['name'] + '_b' + str(batch_size) + '_lr' + str(initial_lr) + '_opt' + optimizer.__class__.__name__ +'_Final.pth')
         logger.info('Training stopped by user...')
         print('Training stopped by user...')
         plt.show()
