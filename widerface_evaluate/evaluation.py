@@ -292,6 +292,11 @@ def evaluation(pred, gt_path, iou_thresh=0.5):
     print("Medium Val AP: {}".format(aps[1]))
     print("Hard   Val AP: {}".format(aps[2]))
     print("=================================================")
+    np.savetxt('APs.txt',
+        np.array(["Easy   Val AP: {}\n".format(aps[0]),
+                "Medium Val AP: {}\n".format(aps[1]),
+                "Hard   Val AP: {}\n".format(aps[2])]),
+        fmt='%s')
 
 
 if __name__ == '__main__':

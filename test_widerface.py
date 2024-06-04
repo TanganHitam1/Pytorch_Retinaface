@@ -88,7 +88,7 @@ if __name__ == '__main__':
 
     # testing dataset
     testset_folder = args.dataset_folder
-    testset_list = args.dataset_folder[:-7] + "label.txt"
+    testset_list = args.dataset_folder[:-7] + "wider_val.txt"
 
     with open(testset_list, 'r') as fr:
         test_dataset = fr.read()
