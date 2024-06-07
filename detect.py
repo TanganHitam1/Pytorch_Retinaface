@@ -14,9 +14,9 @@ import time
 
 parser = argparse.ArgumentParser(description='Retinaface')
 
-parser.add_argument('-m', '--trained_model', default='./weights/mobilenet0.25_Final.pth',
+parser.add_argument('-m', '--trained_model', default='./weights/Resnet50/b8/lr0.001/optSGD/Resnet50_b8_lr1.0000000000000003e-05_optSGD_Final.pth',
                     type=str, help='Trained state_dict file path to open')
-parser.add_argument('--network', default='mobile0.25', help='Backbone network mobile0.25 or resnet50')
+parser.add_argument('--network', default='resnet50', help='Backbone network mobile0.25 or resnet50')
 parser.add_argument('--cpu', action="store_true", default=False, help='Use cpu inference')
 parser.add_argument('--confidence_threshold', default=0.02, type=float, help='confidence_threshold')
 parser.add_argument('--top_k', default=5000, type=int, help='top_k')
@@ -84,7 +84,7 @@ if __name__ == '__main__':
 
     # testing begin
     for i in range(100):
-        image_path = "./curve/test3.jpg"
+        image_path = "./curve/test6.jpg"
         img_raw = cv2.imread(image_path, cv2.IMREAD_COLOR)
 
         img = np.float32(img_raw)
@@ -98,9 +98,10 @@ if __name__ == '__main__':
         scale = scale.to(device)
 
         tic = time.time()
+        # print(net(img))
         loc, conf, landms = net(img)  # forward pass
         print('net forward time: {:.4f}'.format(time.time() - tic))
-
+        # print(img[loc[0]:loc[2], loc[1]:loc[3]])
         priorbox = PriorBox(cfg, image_size=(im_height, im_width))
         priors = priorbox.forward()
         priors = priors.to(device)
@@ -145,6 +146,7 @@ if __name__ == '__main__':
         # show image
         if args.save_image:
             for b in dets:
+                print(b.shape)
                 if b[4] < args.vis_thres:
                     continue
                 text = "{:.4f}".format(b[4])
@@ -163,6 +165,6 @@ if __name__ == '__main__':
                 cv2.circle(img_raw, (b[13], b[14]), 1, (255, 0, 0), 4)
             # save image
 
-            name = "test.jpg"
+            name = "test6.jpg"
             cv2.imwrite(name, img_raw)
 
