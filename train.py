@@ -19,8 +19,8 @@ from tqdm import tqdm
 
 parser = argparse.ArgumentParser(description='Retinaface Training')
 parser.add_argument('--training_dataset', default='./data/widerface/train/label.txt', help='Training dataset directory')
-parser.add_argument('--test_dataset', default='./data/widerface/test/label.txt', help='Testing dataset directory')
-parser.add_argument('--network', default='mobile0.25', help='Backbone network mobile0.25 or resnet50')
+parser.add_argument('--validating_dataset', default='./data/widerface/val/label.txt', help='validation dataset directory')
+parser.add_argument('--network', default='resnet50', help='Backbone network mobile0.25 or resnet50')
 parser.add_argument('--num_workers', default=1, type=int, help='Number of workers used in dataloading')
 parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
@@ -33,7 +33,6 @@ parser.add_argument('--batch_size', default=4, type=int, help='Batch size for tr
 parser.add_argument('--optimizer', default='sgd', help='Optimizer for training')
 
 args = parser.parse_args()
-
 
 if not os.path.exists(args.save_folder):
     os.mkdir(args.save_folder)
@@ -58,18 +57,15 @@ weight_decay = args.weight_decay
 initial_lr = args.lr
 gamma = args.gamma
 training_dataset = args.training_dataset
-testing_dataset = args.test_dataset
+validating_dataset = args.validating_dataset
 save_folder = args.save_folder
 
 net = RetinaFace(cfg=cfg)
-# print("Printing net...")
-# print(net)
 
 if args.resume_net is not None:
     lr = 1e-4
     print('Loading resume network...')
     state_dict = torch.load(args.resume_net)
-    # create new OrderedDict that does not contain `module.`
     from collections import OrderedDict
     new_state_dict = OrderedDict()
     for k, v in state_dict.items():
@@ -111,9 +107,7 @@ elif args.optimizer == 'asgd':
 else:
     raise ValueError('Invalid optimizer')
 
-# # optimizer = optim.SGD(net.parameters(), lr=initial_lr, momentum=momentum, weight_decay=weight_decay)
 criterion = MultiBoxLoss(num_classes, 0.35, True, 0, True, 7, 0.35, False)
-
 
 priorbox = PriorBox(cfg, image_size=(img_dim, img_dim))
 with torch.no_grad():
@@ -141,24 +135,23 @@ epoch = 0 + args.resume_epoch
 def curve_plot(fig_name, batch_size, lr, optimizer_name, var_name):
     np.savetxt(f'{curve_path}/{var_name}_b{batch_size}_lr{lr}_opt{optimizer_name}.txt', var_name)
     plt.plot(var_name)
-    plt.title(f'{var_name}')
+    plt.title(f'{fig_name}')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
-    plt.savefig(f'{curve_path}/{var_name}_b{batch_size}_lr{lr}_opt{optimizer_name}.png')
+    plt.savefig(f'{curve_path}/{fig_name}_b{batch_size}_lr{lr}_opt{optimizer_name}.png')
     plt.cla()
-    
+
 def avg(value):
     return sum(value) / len(value)
 
 def train(epoch):
-    
     net.train()
     print('Loading Dataset...')
     
     epoch = int(epoch)
 
-    dataset = WiderFaceDetection(training_dataset,preproc(img_dim, rgb_mean))
-    test_dataset = WiderFaceDetection(test_dataset, preproc(img_dim, rgb_mean))
+    dataset = WiderFaceDetection(training_dataset, preproc(img_dim, rgb_mean))
+    val_dataset = WiderFaceDetection(validating_dataset, preproc(img_dim, rgb_mean))
 
     epoch_size = math.ceil(len(dataset) / batch_size)
     max_iter = max_epoch * epoch_size
@@ -170,176 +163,111 @@ def train(epoch):
         start_iter = args.resume_epoch * epoch_size
         text = args.resume_net.split('/')[-1]
         text = text.split('_')[-2]
-        # print(text)
         lr = float(text[2:])
-        # print(lr)
     else:
         start_iter = 0
-    loss_values2 =[]
-    loss_values1 = []
-    llv1 = []
-    llv2 = []
-    lcv1 = []
-    lcv2 = []
-    llmv1 = []
-    llmv2 = []
-    loss_values2_test =[]
-    loss_values1_test = []
-    llv1_test = []
-    llv2_test = []
-    lcv1_test = []
-    lcv2_test = []
-    llmv1_test = []
-    llmv2_test = []
-    i=0
+
+    loss_values_train = []
+    loc_loss_train = []
+    conf_loss_train = []
+    landm_loss_train = []
+
+    loss_values_val = []
+    loc_loss_val = []
+    conf_loss_val = []
+    landm_loss_val = []
+
     training = tqdm(range(start_iter, max_iter), desc=f'Epoch: {epoch+1}')
     for iteration in training:
-        # print('Epoch: ', epoch+1)
         if iteration % epoch_size == 0:
             training.set_description(f'Epoch: {epoch+1}')
             logger.info(f'Epoch: {epoch+1}')
-            if i != 0:
-                # temp_loss_values = sum(loss_values1) / len(loss_values1)
-                # temp_llv = sum(llv1) / len(llv1)
-                # temp_lcv = sum(lcv1) / len(lcv1)
-                # temp_llmv = sum(llmv1) / len(llmv1)
-                loss_values2.append(avg(loss_values1))
-                llv2.append(avg(llv1))
-                lcv2.append(avg(lcv1))
-                llmv2.append(avg(llmv1))
-                loss_values1 = []
-                llv1 = []
-                lcv1 = []
-                llmv1 = []
+            if iteration > 0:
+                loss_values_train.append(avg(loc_loss_train))
+                loc_loss_train.append(avg(loc_loss_train))
+                conf_loss_train.append(avg(conf_loss_train))
+                landm_loss_train.append(avg(landm_loss_train))
+                
+                loss_values_val.append(avg(loc_loss_val))
+                loc_loss_val.append(avg(loc_loss_val))
+                conf_loss_val.append(avg(conf_loss_val))
+                landm_loss_val.append(avg(landm_loss_val))
 
-                # temp_loss_values_test = sum(loss_values1_test) / len(loss_values1_test)
-                # temp_llv_test = sum(llv1_test) / len(llv1_test)
-                # temp_lcv_test = sum(lcv1_test) / len(lcv1_test)
-                # temp_llmv_test = sum(llmv1_test) / len(llmv1_test)
-                loss_values2_test.append(avg(loss_values1_test))
-                llv2_test.append(avg(llv1_test))
-                lcv2_test.append(avg(lcv1_test))
-                llmv2_test.append(avg(llmv1_test))
+                curve_plot('total loss', batch_size, lr, optimizer.__class__.__name__, loss_values_train)
+                curve_plot('localization_loss', batch_size, lr, optimizer.__class__.__name__, loc_loss_train)
+                curve_plot('classification_loss', batch_size, lr, optimizer.__class__.__name__, conf_loss_train)
+                curve_plot('landmark_loss', batch_size, lr, optimizer.__class__.__name__, landm_loss_train)
 
-                loss_values1_test = []
-                llv1_test = []
-                lcv1_test = []
-                llmv1_test = []
+                curve_plot('total loss_val', batch_size, lr, optimizer.__class__.__name__, loss_values_val)
+                curve_plot('localization_loss_val', batch_size, lr, optimizer.__class__.__name__, loc_loss_val)
+                curve_plot('classification_loss_val', batch_size, lr, optimizer.__class__.__name__, conf_loss_val)
+                curve_plot('landmark_loss_val', batch_size, lr, optimizer.__class__.__name__, landm_loss_val)
                 
-                # config_logger.empty_var_logger('llv1', llv1)
-                # print('localization loss: ', temp_llv)
-                # print('classification loss: ', temp_lcv)
-                # print('landmark loss: ', temp_llmv)
-                # print('total loss: ', temp_loss_values)
-                # print('learning rate: ', lr)
-                # print(loss_values2)
-                loss_list = [loss_values2, llv2, lcv2, llmv2, loss_values2_test, llv2_test, lcv2_test, llmv2_test]
-                for i in range(len(loss_list)):
-                    curve_plot('loss', batch_size, lr, optimizer.__class__.__name__, loss_list[i])
-                np.savetxt(f'{curve_path}/loss_values_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', loss_values2)
-                np.savetxt(f'{curve_path}/localization_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', llv2)
-                np.savetxt(f'{curve_path}/classification_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', lcv2)
-                np.savetxt(f'{curve_path}/landmark_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', llmv2)
+                loc_loss_train = []
+                conf_loss_train = []
+                landm_loss_train = []
                 
-                np.savetxt(f'{curve_path}/loss_values_test_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', loss_values2_test)
-                np.savetxt(f'{curve_path}/localization_loss_test_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', llv2_test)
-                np.savetxt(f'{curve_path}/classification_loss_test_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', lcv2_test)
-                np.savetxt(f'{curve_path}/landmark_loss_test_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', llmv2_test)
-                
-                
-                plt.plot(loss_values2)
-                plt.title('Total loss')
-                plt.xlabel('Epoch')
-                plt.ylabel('Loss')
-                plt.savefig(f'{curve_path}/loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.png')
-                plt.cla()
-                
-                plt.plot(llv2)
-                plt.title('Localization loss')
-                plt.xlabel('Epoch')
-                plt.ylabel('Loss')
-                plt.savefig(f'{curve_path}/localization_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.png')
-                plt.cla()
-                
-                plt.plot(lcv2)
-                plt.title('Classification loss')
-                plt.xlabel('Epoch')
-                plt.ylabel('Loss')
-                plt.savefig(f'{curve_path}/classification_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.png')
-                plt.cla()
-                
-                plt.plot(llmv2)
-                plt.title('Landmark loss')
-                plt.xlabel('Epoch')
-                plt.ylabel('Loss')
-                plt.savefig(f'{curve_path}/landmark_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.png')
-                plt.cla()
-            i = 0
-        i+=1
-        if iteration % epoch_size == 0:
-            # create batch iterator
-            batch_iterator = iter(data.DataLoader(dataset, batch_size, shuffle=True, num_workers=num_workers, collate_fn=detection_collate))
-            batch_iterator_test = iter(data.DataLoader(test_dataset, batch_size, shuffle=True, num_workers=num_workers, collate_fn=detection_collate))
+                loc_loss_val = []
+                conf_loss_val = []
+                landm_loss_val = []
+
             if (epoch % 10 == 0 and epoch > 0) or (epoch % 10 == 0 and epoch > cfg['decay1']):
-                print(f'Saving model at epcoch: {epoch}')
-                torch.save(net.state_dict(), weight_path + cfg['name']+ '_epoch_' + str(epoch) + '_b' + str(batch_size) + '_lr' + str(lr) + '_opt' + str(optimizer.__class__.__name__) +'.pth')
+                print(f'Saving model at epoch: {epoch}')
+                torch.save(net.state_dict(), weight_path + cfg['name'] + '_epoch_' + str(epoch) + '_b' + str(batch_size) + '_lr' + str(lr) + '_opt' + optimizer.__class__.__name__ + '.pth')
             epoch += 1
 
-        load_t0 = time.time()
         if iteration in stepvalues:
             step_index += 1
         lr = adjust_learning_rate(optimizer, gamma, epoch, step_index, iteration, epoch_size)
 
-        # load train data
-        images, targets = next(batch_iterator)
+        # Training batch
+        images, targets = next(iter(data.DataLoader(dataset, batch_size, shuffle=True, num_workers=num_workers, collate_fn=detection_collate)))
         images = images.cuda()
         targets = [anno.cuda() for anno in targets]
 
-        # forward
         out = net(images)
 
-        # backprop
         optimizer.zero_grad()
         loss_l, loss_c, loss_landm = criterion(out, priors, targets)
         loss = cfg['loc_weight'] * loss_l + loss_c + loss_landm
         loss.backward()
         optimizer.step()
-        load_t1 = time.time()
-        batch_time = load_t1 - load_t0
-        eta = int(batch_time * (max_iter - iteration))
-        # print(loss_values1)
-        loss_values1.append(loss.item())
-        llv1.append(loss_l.item())
-        lcv1.append(loss_c.item())
-        llmv1.append(loss_landm.item())
-        
-        net.eval()
-        # print('total: ',loss_values1)
-        # print('localization: ',llv1)
-        # print('Epoch:{}/{} || Epochiter: {}/{} || Iter: {}/{} || Loc: {:.4f} Cla: {:.4f} Landm: {:.4f} || LR: {:.8f} || Batchtime: {:.4f} s || ETA: {}'
-            # .format(epoch, max_epoch, (iteration % epoch_size) + 1,
-            # epoch_size, iteration + 1, max_iter, loss_l.item(), loss_c.item(), loss_landm.item(), lr, batch_time, str(datetime.timedelta(seconds=eta))))
-    logger.info(llv2)
-    logger.info(sum(llv1))
-    logger.info(len(llv1))
-    logger.info(sum(llv1) / len(llv1))
-    logger.info("Training complete...")
-    torch.save(net.state_dict(), weight_path + cfg['name'] + '_b' + str(batch_size) + '_lr' + str(lr) + '_opt' + optimizer.__class__.__name__ +'_Final.pth')
-    return epoch
-    # plt.show()
-    # torch.save(net.state_dict(), save_folder + 'Final_Retinaface.pth')
 
+        loc_loss_train.append(loss_l.item())
+        conf_loss_train.append(loss_c.item())
+        landm_loss_train.append(loss_landm.item())
+
+        # Validation batch
+        net.eval()
+        with torch.no_grad():
+            images, targets = next(iter(data.DataLoader(val_dataset, batch_size, shuffle=True, num_workers=num_workers, collate_fn=detection_collate)))
+            images = images.cuda()
+            targets = [anno.cuda() for anno in targets]
+
+            out = net(images)
+
+            loss_l, loss_c, loss_landm = criterion(out, priors, targets)
+            loss = cfg['loc_weight'] * loss_l + loss_c + loss_landm
+
+            loc_loss_val.append(loss_l.item())
+            conf_loss_val.append(loss_c.item())
+            landm_loss_val.append(loss_landm.item())
+        net.train()
+
+    logger.info(loc_loss_train)
+    logger.info(sum(loc_loss_train))
+    logger.info(len(loc_loss_train))
+    logger.info(sum(loc_loss_train) / len(loc_loss_train))
+    logger.info("Training complete...")
+    torch.save(net.state_dict(), weight_path + cfg['name'] + '_b' + str(batch_size) + '_lr' + str(lr) + '_opt' + optimizer.__class__.__name__ + '_Final.pth')
+    return epoch
 
 def adjust_learning_rate(optimizer, gamma, epoch, step_index, iteration, epoch_size):
-    """Sets the learning rate
-    # Adapted from PyTorch Imagenet example:
-    # https://github.com/pytorch/examples/blob/master/imagenet/main.py
-    """
     warmup_epoch = -1
     if epoch <= warmup_epoch:
-        lr = 1e-6 + (initial_lr-1e-6) * iteration / (epoch_size * warmup_epoch)
+        lr = 1e-6 + (initial_lr - 1e-6) * iteration / (epoch_size * warmup_epoch)
     else:
-        lr = initial_lr * (gamma ** (step_index))
+        lr = initial_lr * (gamma ** step_index)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     return lr
@@ -349,7 +277,7 @@ if __name__ == '__main__':
     try:
         epoch = train(epoch)
     except KeyboardInterrupt:
-        torch.save(net.state_dict(), weight_path + cfg['name'] + '_b' + str(batch_size) + '_lr' + str(initial_lr) + '_opt' + optimizer.__class__.__name__ +'_Final.pth')
+        torch.save(net.state_dict(), weight_path + cfg['name'] + '_b' + str(batch_size) + '_lr' + str(initial_lr) + '_opt' + optimizer.__class__.__name__ + '_Final.pth')
         logger.info('Training stopped by user...')
         print('Training stopped by user...')
         plt.show()
