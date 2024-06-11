@@ -19,6 +19,7 @@ from tqdm import tqdm
 
 parser = argparse.ArgumentParser(description='Retinaface Training')
 parser.add_argument('--training_dataset', default='./data/widerface/train/label.txt', help='Training dataset directory')
+parser.add_argument('--test_dataset', default='./data/widerface/test/label.txt', help='Testing dataset directory')
 parser.add_argument('--network', default='mobile0.25', help='Backbone network mobile0.25 or resnet50')
 parser.add_argument('--num_workers', default=1, type=int, help='Number of workers used in dataloading')
 parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, help='initial learning rate')
@@ -57,6 +58,7 @@ weight_decay = args.weight_decay
 initial_lr = args.lr
 gamma = args.gamma
 training_dataset = args.training_dataset
+testing_dataset = args.test_dataset
 save_folder = args.save_folder
 
 net = RetinaFace(cfg=cfg)
@@ -136,6 +138,11 @@ if not os.path.exists(weight_path):
 
 epoch = 0 + args.resume_epoch
 
+def curve_plot():
+    
+def avg(value):
+    return sum(value) / len(value)
+
 def train(epoch):
     
     net.train()
@@ -144,6 +151,7 @@ def train(epoch):
     epoch = int(epoch)
 
     dataset = WiderFaceDetection(training_dataset,preproc(img_dim, rgb_mean))
+    test_dataset = WiderFaceDetection(test_dataset, preproc(img_dim, rgb_mean))
 
     epoch_size = math.ceil(len(dataset) / batch_size)
     max_iter = max_epoch * epoch_size
@@ -168,6 +176,14 @@ def train(epoch):
     lcv2 = []
     llmv1 = []
     llmv2 = []
+    loss_values2_test =[]
+    loss_values1_test = []
+    llv1_test = []
+    llv2_test = []
+    lcv1_test = []
+    lcv2_test = []
+    llmv1_test = []
+    llmv2_test = []
     i=0
     training = tqdm(range(start_iter, max_iter), desc=f'Epoch: {epoch+1}')
     for iteration in training:
@@ -182,23 +198,45 @@ def train(epoch):
                 temp_llmv = sum(llmv1) / len(llmv1)
                 loss_values2.append(temp_loss_values)
                 llv2.append(temp_llv)
-                # config_logger.empty_var_logger('llv1', llv1)
-                print('localization loss: ', temp_llv)
-                print('classification loss: ', temp_lcv)
-                print('landmark loss: ', temp_llmv)
-                print('total loss: ', temp_loss_values)
-                # print('learning rate: ', lr)
+                
                 lcv2.append(temp_lcv)
                 llmv2.append(temp_llmv)
                 loss_values1 = []
                 llv1 = []
                 lcv1 = []
                 llmv1 = []
+                
+                temp_loss_values_test = sum(loss_values1_test) / len(loss_values1_test)
+                temp_llv_test = sum(llv1_test) / len(llv1_test)
+                temp_lcv_test = sum(lcv1_test) / len(lcv1_test)
+                temp_llmv_test = sum(llmv1_test) / len(llmv1_test)
+                loss_values2_test.append(temp_loss_values_test)
+                llv2_test.append(temp_llv_test)
+                lcv2_test.append(temp_lcv_test)
+                llmv2_test.append(temp_llmv_test)
+                
+                loss_values1_test = []
+                llv1_test = []
+                lcv1_test = []
+                llmv1_test = []
+                
+                # config_logger.empty_var_logger('llv1', llv1)
+                # print('localization loss: ', temp_llv)
+                # print('classification loss: ', temp_lcv)
+                # print('landmark loss: ', temp_llmv)
+                # print('total loss: ', temp_loss_values)
+                # print('learning rate: ', lr)
                 # print(loss_values2)
                 np.savetxt(f'{curve_path}/loss_values_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', loss_values2)
                 np.savetxt(f'{curve_path}/localization_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', llv2)
                 np.savetxt(f'{curve_path}/classification_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', lcv2)
                 np.savetxt(f'{curve_path}/landmark_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', llmv2)
+                
+                np.savetxt(f'{curve_path}/loss_values_test_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', loss_values2_test)
+                np.savetxt(f'{curve_path}/localization_loss_test_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', llv2_test)
+                np.savetxt(f'{curve_path}/classification_loss_test_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', lcv2_test)
+                np.savetxt(f'{curve_path}/landmark_loss_test_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', llmv2_test)
+                
                 
                 plt.plot(loss_values2)
                 plt.title('Total loss')
@@ -232,6 +270,7 @@ def train(epoch):
         if iteration % epoch_size == 0:
             # create batch iterator
             batch_iterator = iter(data.DataLoader(dataset, batch_size, shuffle=True, num_workers=num_workers, collate_fn=detection_collate))
+            batch_iterator_test = iter(data.DataLoader(test_dataset, batch_size, shuffle=True, num_workers=num_workers, collate_fn=detection_collate))
             if (epoch % 10 == 0 and epoch > 0) or (epoch % 10 == 0 and epoch > cfg['decay1']):
                 print(f'Saving model at epcoch: {epoch}')
                 torch.save(net.state_dict(), weight_path + cfg['name']+ '_epoch_' + str(epoch) + '_b' + str(batch_size) + '_lr' + str(lr) + '_opt' + str(optimizer.__class__.__name__) +'.pth')
@@ -264,6 +303,8 @@ def train(epoch):
         llv1.append(loss_l.item())
         lcv1.append(loss_c.item())
         llmv1.append(loss_landm.item())
+        
+        net.eval()
         # print('total: ',loss_values1)
         # print('localization: ',llv1)
         # print('Epoch:{}/{} || Epochiter: {}/{} || Iter: {}/{} || Loc: {:.4f} Cla: {:.4f} Landm: {:.4f} || LR: {:.8f} || Batchtime: {:.4f} s || ETA: {}'
