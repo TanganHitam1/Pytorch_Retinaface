@@ -225,17 +225,18 @@ def voc_ap(rec, prec):
     ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
     return ap
 
-def plot_pr_curve(rec, prec, title):
+def plot_pr_curve(rec, prec, title, name):
     plt.figure()
     plt.plot(rec, prec, lw=2)
     plt.xlabel('Recall')
     plt.ylabel('Precision')
     plt.title(f'Precision-Recall curve for {title}')
     plt.grid(True)
-    plt.savefig(f'{title}_pr_curve.png')
+    plt.savefig(f'{name}_{title}_pr_curve.png')
     plt.close()
+    np.savetxt(f'{name}_{title}_pr_curve.txt', np.array([rec, prec]), fmt='%s')
 
-def evaluation(pred, gt_path, iou_thresh=0.5):
+def evaluation(pred, gt_path,name, iou_thresh=0.5):
     pred = get_preds(pred)
     norm_score(pred)
     facebox_list, event_list, file_list, hard_gt_list, medium_gt_list, easy_gt_list = get_gt_boxes(gt_path)
@@ -282,7 +283,7 @@ def evaluation(pred, gt_path, iou_thresh=0.5):
 
         propose = pr_curve[:, 0]
         recall = pr_curve[:, 1]
-        plot_pr_curve(recall, propose, settings[setting_id])
+        plot_pr_curve(recall, propose, settings[setting_id], name)
 
         ap = voc_ap(recall, propose)
         aps.append(ap)
@@ -306,7 +307,11 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--gt', default='./ground_truth/')
 
     args = parser.parse_args()
-    evaluation(args.pred, args.gt)
+    names = ["MobileNet0.25", "ResNet50"]
+    pred_paths = ["./widerface_txt_mobile0.25/","./widerface_txt_resnet50/"]
+    for i, pred_path in enumerate(pred_paths):
+        evaluation(pred_path, args.gt, names[i])
+    # evaluation(args.pred, args.gt)
 
 
 

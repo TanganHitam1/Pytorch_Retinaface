@@ -19,7 +19,7 @@ parser.add_argument('-m', '--trained_model', default='./weights/mobilenet0.25_Fi
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--network', default='mobile0.25', help='Backbone network mobile0.25 or resnet50')
 parser.add_argument('--origin_size', default=True, type=str, help='Whether use origin image size to evaluate')
-parser.add_argument('--save_folder', default='./widerface_evaluate/widerface_txt/', type=str, help='Dir to save txt results')
+parser.add_argument('--save_folder', default='./widerface_evaluate/widerface_txt', type=str, help='Dir to save txt results')
 parser.add_argument('--cpu', action="store_true", default=False, help='Use cpu inference')
 parser.add_argument('--dataset_folder', default='./data/widerface/val/images/', type=str, help='dataset path')
 parser.add_argument('--confidence_threshold', default=0.02, type=float, help='confidence_threshold')
@@ -74,11 +74,13 @@ if __name__ == '__main__':
     cfg = None
     if args.network == "mobile0.25":
         cfg = cfg_mnet
+        trained_model = './weights/mobilenet0.25_best.pth'
     elif args.network == "resnet50":
         cfg = cfg_re50
+        trained_model = './weights/Resnet50_best.pth'
     # net and model
     net = RetinaFace(cfg=cfg, phase = 'test')
-    net = load_model(net, args.trained_model, args.cpu)
+    net = load_model(net, trained_model, args.cpu)
     net.eval()
     print('Finished loading model!')
     # print(net)
@@ -88,7 +90,7 @@ if __name__ == '__main__':
 
     # testing dataset
     testset_folder = args.dataset_folder
-    testset_list = args.dataset_folder[:-7] + "wider_val.txt"
+    testset_list = args.dataset_folder[:-7] + f"label.txt"
 
     with open(testset_list, 'r') as fr:
         test_dataset = fr.read()
@@ -129,7 +131,7 @@ if __name__ == '__main__':
         scale = scale.to(device)
 
         _t['forward_pass'].tic()
-        loc, conf, landms = net(img)  # forward pass
+        (loc, conf, landms), out = net(img)  # forward pass
         _t['forward_pass'].toc()
         _t['misc'].tic()
         priorbox = PriorBox(cfg, image_size=(im_height, im_width))
@@ -176,7 +178,7 @@ if __name__ == '__main__':
         _t['misc'].toc()
 
         # --------------------------------------------------------------------
-        save_name = args.save_folder + img_name[:-4] + ".txt"
+        save_name = args.save_folder + "_" + args.network + "/" + img_name[:-4] + ".txt"
         dirname = os.path.dirname(save_name)
         if not os.path.isdir(dirname):
             os.makedirs(dirname)

@@ -138,7 +138,14 @@ if not os.path.exists(weight_path):
 
 epoch = 0 + args.resume_epoch
 
-def curve_plot():
+def curve_plot(fig_name, batch_size, lr, optimizer_name, var_name):
+    np.savetxt(f'{curve_path}/{var_name}_b{batch_size}_lr{lr}_opt{optimizer_name}.txt', var_name)
+    plt.plot(var_name)
+    plt.title(f'{var_name}')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.savefig(f'{curve_path}/{var_name}_b{batch_size}_lr{lr}_opt{optimizer_name}.png')
+    plt.cla()
     
 def avg(value):
     return sum(value) / len(value)
@@ -192,29 +199,28 @@ def train(epoch):
             training.set_description(f'Epoch: {epoch+1}')
             logger.info(f'Epoch: {epoch+1}')
             if i != 0:
-                temp_loss_values = sum(loss_values1) / len(loss_values1)
-                temp_llv = sum(llv1) / len(llv1)
-                temp_lcv = sum(lcv1) / len(lcv1)
-                temp_llmv = sum(llmv1) / len(llmv1)
-                loss_values2.append(temp_loss_values)
-                llv2.append(temp_llv)
-                
-                lcv2.append(temp_lcv)
-                llmv2.append(temp_llmv)
+                # temp_loss_values = sum(loss_values1) / len(loss_values1)
+                # temp_llv = sum(llv1) / len(llv1)
+                # temp_lcv = sum(lcv1) / len(lcv1)
+                # temp_llmv = sum(llmv1) / len(llmv1)
+                loss_values2.append(avg(loss_values1))
+                llv2.append(avg(llv1))
+                lcv2.append(avg(lcv1))
+                llmv2.append(avg(llmv1))
                 loss_values1 = []
                 llv1 = []
                 lcv1 = []
                 llmv1 = []
-                
-                temp_loss_values_test = sum(loss_values1_test) / len(loss_values1_test)
-                temp_llv_test = sum(llv1_test) / len(llv1_test)
-                temp_lcv_test = sum(lcv1_test) / len(lcv1_test)
-                temp_llmv_test = sum(llmv1_test) / len(llmv1_test)
-                loss_values2_test.append(temp_loss_values_test)
-                llv2_test.append(temp_llv_test)
-                lcv2_test.append(temp_lcv_test)
-                llmv2_test.append(temp_llmv_test)
-                
+
+                # temp_loss_values_test = sum(loss_values1_test) / len(loss_values1_test)
+                # temp_llv_test = sum(llv1_test) / len(llv1_test)
+                # temp_lcv_test = sum(lcv1_test) / len(lcv1_test)
+                # temp_llmv_test = sum(llmv1_test) / len(llmv1_test)
+                loss_values2_test.append(avg(loss_values1_test))
+                llv2_test.append(avg(llv1_test))
+                lcv2_test.append(avg(lcv1_test))
+                llmv2_test.append(avg(llmv1_test))
+
                 loss_values1_test = []
                 llv1_test = []
                 lcv1_test = []
@@ -227,6 +233,9 @@ def train(epoch):
                 # print('total loss: ', temp_loss_values)
                 # print('learning rate: ', lr)
                 # print(loss_values2)
+                loss_list = [loss_values2, llv2, lcv2, llmv2, loss_values2_test, llv2_test, lcv2_test, llmv2_test]
+                for i in range(len(loss_list)):
+                    curve_plot('loss', batch_size, lr, optimizer.__class__.__name__, loss_list[i])
                 np.savetxt(f'{curve_path}/loss_values_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', loss_values2)
                 np.savetxt(f'{curve_path}/localization_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', llv2)
                 np.savetxt(f'{curve_path}/classification_loss_b{batch_size}_lr{lr}_opt{optimizer.__class__.__name__}.txt', lcv2)
