@@ -224,6 +224,11 @@ def train(epoch):
 
             out = net(images)
 
+            _, predicted = torch.max(out[1], -1)
+            total = targets[1].size(0)
+            correct = (predicted == targets[1]).sum().item()
+            acc_train += correct / total
+
             optimizer.zero_grad()
             (loss_l, loss_c, loss_landm), out = criterion(out, priors, targets)
             loss = cfg['loc_weight'] * loss_l + loss_c + loss_landm
@@ -235,10 +240,6 @@ def train(epoch):
             conf_loss_train += loss_c.item()
             landm_loss_train += loss_landm.item()
 
-            _, predicted = torch.max(out[1], -1)
-            total = targets[1].size(0)
-            correct = (predicted == targets[1]).sum().item()
-            acc_train += correct / total
             i+=1
             tqdm_train.set_postfix_str(f"Loss: {loss.item():.4f}, Acc: {correct / i:.4f}")
 
@@ -252,6 +253,11 @@ def train(epoch):
 
                 out = net(images)
 
+                _, predicted = torch.max(out[1], -1)
+                total = targets[1].size(0)
+                correct = (predicted == targets[1]).sum().item()
+                acc_val += correct / total
+
                 (loss_l, loss_c, loss_landm), out = criterion(out, priors, targets)
                 loss = cfg['loc_weight'] * loss_l + loss_c + loss_landm
 
@@ -259,11 +265,6 @@ def train(epoch):
                 loc_loss_val += loss_l.item()
                 conf_loss_val += loss_c.item()
                 landm_loss_val += loss_landm.item()
-
-                _, predicted = torch.max(out[1], -1)
-                total = targets[1].size(0)
-                correct = (predicted == targets[1]).sum().item()
-                acc_val += correct / total
                 i+=1
                 tqdm_val.set_postfix_str(f"Loss: {loss.item():.4f}, Acc: {correct / i:.4f}")
 
