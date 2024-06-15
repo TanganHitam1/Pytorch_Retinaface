@@ -208,7 +208,7 @@ def train(epoch):
     best_acc_val = 0
     best_loss_val = 10000
 
-    tqdm_epoch = tqdm(range(epoch, max_epoch), desc='Epoch')
+    tqdm_epoch = tqdm(range(epoch, max_epoch), desc='Epoch', total=max_epoch, leave=False)
 
     for epoch in tqdm_epoch:
 
@@ -270,6 +270,8 @@ def train(epoch):
             best_acc_val = acc_val
             best_loss_val = loss_values_val
             save_model(net, f"best_{epoch}")
+            
+        tqdm_epoch.set_postfix_str(f"Loss: {average_train[0]:.4f}, Acc: {average_train[-1]:.4f}, Val Loss: {average_val[0]:.4f}, Val Acc: {average_val[-1]:.4f}")
     save_model(net, "Final")
     return epoch
 
