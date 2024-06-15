@@ -15,7 +15,7 @@ from models.retinaface import RetinaFace
 from matplotlib import pyplot as plt
 import numpy as np
 import config_logger
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 parser = argparse.ArgumentParser(description='Retinaface Training')
 parser.add_argument('--training_dataset', default='./data/widerface/train/label.txt', help='Training dataset directory')
@@ -141,8 +141,31 @@ def curve_plot(fig_name, batch_size, lr, optimizer_name, var_name):
     plt.savefig(f'{curve_path}/{fig_name}_b{batch_size}_lr{lr}_opt{optimizer_name}.png')
     plt.cla()
 
-def avg(value):
-    return sum(value) / len(value)
+def avg(xx, y):
+    average = []
+    for x in xx:
+        average.append(x/y)
+    return average
+
+def saving_txt(var_list, batch_size, lr, optimizer_name):
+    for var_name in var_list:
+        np.savetxt(f'{curve_path}/{var_name}_b{batch_size}_lr{lr}_opt{optimizer_name}.txt', var_name)
+
+def plotting(list_train, list_val, plot_names, batch_size, lr, optimizer_name):
+    for i in range(len(list_train)):
+        plt.plot(list_train[i], label='train')
+        plt.plot(list_val[i], label='val')
+        plt.title(plot_names[i])
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.savefig(f'{curve_path}/{plot_names[i]}_b{batch_size}_lr{lr}_opt{optimizer_name}.png')
+        plt.cla()
+
+def append_list(avg_list, all_list):
+    for i in range(len(avg_list)):
+        all_list[i].append(avg_list[i])
+    return all_list
 
 def train(epoch):
     net.train()
@@ -167,113 +190,77 @@ def train(epoch):
     train_loader = data.DataLoader(dataset, batch_size=batch_size, sampler=train_sampler, num_workers=num_workers, collate_fn=detection_collate)
     val_loader = data.DataLoader(dataset, batch_size=batch_size, sampler=val_sampler, num_workers=num_workers, collate_fn=detection_collate)
 
-    epoch_size = math.ceil(len(dataset) / batch_size)
-    max_iter = max_epoch * epoch_size
+    # epoch_size = math.ceil(len(dataset) / batch_size)
 
-    stepvalues = (cfg['decay1'] * epoch_size, cfg['decay2'] * epoch_size)
-    step_index = 0
+    list_loss_values_train, list_loc_loss_train, list_conf_loss_train, list_landm_loss_train = [], [], [], []
+    list_loss_values_val, list_loc_loss_val, list_conf_loss_val, list_landm_loss_val = [], [], [], []
+    list_acc_train, list_acc_val = [], []
+    list_train = [list_loss_values_train, list_loc_loss_train, list_conf_loss_train, list_landm_loss_train, list_acc_train]
+    list_val = [list_loss_values_val, list_loc_loss_val, list_conf_loss_val, list_landm_loss_val, list_acc_val]
+    
+    
+    plot_names = ['total loss', 'localization loss', 'classification loss', 'landmark loss', 'val total loss', 'val localization loss', 'val classification loss', 'val landmark loss']
+    
+    tqdm_epoch = tqdm(range(epoch, max_epoch), desc='Epoch')
+    
+    for epoch in tqdm_epoch:
 
-    if args.resume_epoch > 0:
-        start_iter = args.resume_epoch * epoch_size
-        text = args.resume_net.split('/')[-1]
-        text = text.split('_')[-2]
-        lr = float(text[2:])
-    else:
-        start_iter = 0
+        acc_train, loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train = 0, 0, 0, 0, 0
+        acc_val, loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val = 0, 0, 0, 0, 0
 
-    loss_values_train = []
-    loc_loss_train = []
-    conf_loss_train = []
-    landm_loss_train = []
-
-    loss_values_val = []
-    loc_loss_val = []
-    conf_loss_val = []
-    landm_loss_val = []
-
-    training = tqdm(range(start_iter, max_iter), desc=f'Epoch: {epoch+1}')
-    for iteration in training:
-        if iteration % epoch_size == 0:
-            training.set_description(f'Epoch: {epoch+1}')
-            logger.info(f'Epoch: {epoch+1}')
-            if iteration > 0:
-                loss_values_train.append(avg(loc_loss_train))
-                loc_loss_train.append(avg(loc_loss_train))
-                conf_loss_train.append(avg(conf_loss_train))
-                landm_loss_train.append(avg(landm_loss_train))
-                
-                loss_values_val.append(avg(loc_loss_val))
-                loc_loss_val.append(avg(loc_loss_val))
-                conf_loss_val.append(avg(conf_loss_val))
-                landm_loss_val.append(avg(landm_loss_val))
-
-                curve_plot('total loss', batch_size, lr, optimizer.__class__.__name__, loss_values_train)
-                curve_plot('localization_loss', batch_size, lr, optimizer.__class__.__name__, loc_loss_train)
-                curve_plot('classification_loss', batch_size, lr, optimizer.__class__.__name__, conf_loss_train)
-                curve_plot('landmark_loss', batch_size, lr, optimizer.__class__.__name__, landm_loss_train)
-
-                curve_plot('total loss_val', batch_size, lr, optimizer.__class__.__name__, loss_values_val)
-                curve_plot('localization_loss_val', batch_size, lr, optimizer.__class__.__name__, loc_loss_val)
-                curve_plot('classification_loss_val', batch_size, lr, optimizer.__class__.__name__, conf_loss_val)
-                curve_plot('landmark_loss_val', batch_size, lr, optimizer.__class__.__name__, landm_loss_val)
-                
-                loc_loss_train = []
-                conf_loss_train = []
-                landm_loss_train = []
-                
-                loc_loss_val = []
-                conf_loss_val = []
-                landm_loss_val = []
-
-            if (epoch % 10 == 0 and epoch > 0) or (epoch % 10 == 0 and epoch > cfg['decay1']):
-                print(f'Saving model at epoch: {epoch}')
-                torch.save(net.state_dict(), weight_path + cfg['name'] + '_epoch_' + str(epoch) + '_b' + str(batch_size) + '_lr' + str(lr) + '_opt' + optimizer.__class__.__name__ + '.pth')
-            epoch += 1
-
-        if iteration in stepvalues:
-            step_index += 1
-        # lr = adjust_learning_rate(optimizer, gamma, epoch, step_index, iteration, epoch_size)
-
-        # Training batch
-        images, targets = next(iter(data.DataLoader(dataset, batch_size, shuffle=True, num_workers=num_workers, collate_fn=detection_collate)))
-        images = images.cuda()
-        targets = [anno.cuda() for anno in targets]
-
-        out = net(images)
-
-        optimizer.zero_grad()
-        (loss_l, loss_c, loss_landm), out = criterion(out, priors, targets)
-        loss = cfg['loc_weight'] * loss_l + loss_c + loss_landm
-        loss.backward()
-        optimizer.step()
-
-        loc_loss_train.append(loss_l.item())
-        conf_loss_train.append(loss_c.item())
-        landm_loss_train.append(loss_landm.item())
-
-        # Validation batch
-        net.eval()
-        with torch.no_grad():
-            images, targets = next(iter(data.DataLoader(val_dataset, batch_size, shuffle=True, num_workers=num_workers, collate_fn=detection_collate)))
+        net.train()
+        tqdm_train = tqdm(train_loader, desc='Training')
+        for images, targets in tqdm_train:
             images = images.cuda()
             targets = [anno.cuda() for anno in targets]
 
             out = net(images)
 
+            optimizer.zero_grad()
             (loss_l, loss_c, loss_landm), out = criterion(out, priors, targets)
             loss = cfg['loc_weight'] * loss_l + loss_c + loss_landm
+            loss.backward()
+            optimizer.step()
 
-            loc_loss_val.append(loss_l.item())
-            conf_loss_val.append(loss_c.item())
-            landm_loss_val.append(loss_landm.item())
-        net.train()
+            loss_values_train += loss.item()
+            loc_loss_train += loss_l.item()
+            conf_loss_train += loss_c.item()
+            landm_loss_train += loss_landm.item()
+            
+            _, predicted = torch.max(out[1], -1)
+            total = targets[1].size(0)
+            correct = (predicted == targets[1]).sum().item()
+            acc_train += correct / total
 
-    logger.info(loc_loss_train)
-    logger.info(sum(loc_loss_train))
-    logger.info(len(loc_loss_train))
-    logger.info(sum(loc_loss_train) / len(loc_loss_train))
-    logger.info("Training complete...")
-    torch.save(net.state_dict(), weight_path + cfg['name'] + '_b' + str(batch_size) + '_lr' + str(lr) + '_opt' + optimizer.__class__.__name__ + '_Final.pth')
+        net.eval()
+        with torch.no_grad():
+            tqdm_val = tqdm(val_loader, desc='Validation')
+            for images, targets in tqdm_val:
+                images = images.cuda()
+                targets = [anno.cuda() for anno in targets]
+
+                out = net(images)
+
+                (loss_l, loss_c, loss_landm), out = criterion(out, priors, targets)
+                loss = cfg['loc_weight'] * loss_l + loss_c + loss_landm
+
+                loss_values_val += loss.item()
+                loc_loss_val += loss_l.item()
+                conf_loss_val += loss_c.item()
+                landm_loss_val += loss_landm.item()
+                
+                _, predicted = torch.max(out[1], -1)
+                total = targets[1].size(0)
+                correct = (predicted == targets[1]).sum().item()
+                acc_val += correct / total
+
+        average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train], len(train_loader))
+        average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val], len(val_loader))
+        avg_acc_train = acc_train / len(train_loader)
+        avg_acc_val = acc_val / len(val_loader)
+        list_train = append_list(average_train, list_train)
+        list_val = append_list(average_val, list_val)
+
     return epoch
 
 def adjust_learning_rate(optimizer, gamma, epoch, step_index, iteration, epoch_size):

@@ -1,6 +1,4 @@
 import os
-import os.path
-import sys
 import torch
 import torch.utils.data as data
 import cv2
@@ -99,3 +97,60 @@ def detection_collate(batch):
                 targets.append(annos)
 
     return (torch.stack(imgs, 0), targets)
+
+class WiderFaceValidation(data.Dataset):
+    def __init__(self, txt_path, preproc=None):
+        self.preproc = preproc
+        self.imgs_path = []
+        self.words = []
+        f = open(txt_path,'r')
+        lines = f.readlines()
+        labels = []
+        for line in lines:
+            line = line.rstrip()
+            if line.startswith('#'):
+                if labels:
+                    self.words.append(labels.copy())
+                    labels.clear()
+                path = line[2:]
+                path = txt_path.replace('label.txt','images/') + path
+                self.imgs_path.append(path)
+            else:
+                label = list(map(float, line.split()))
+                labels.append(label)
+        if labels:
+            self.words.append(labels)
+
+    def __len__(self):
+        return len(self.imgs_path)
+
+    def __getitem__(self, index):
+        img = cv2.imread(self.imgs_path[index])
+        height, width, _ = img.shape
+
+        labels = self.words[index]
+        annotations = np.zeros((0, 4))
+        for label in labels:
+            annotation = np.zeros((1, 4))
+            annotation[0, 0] = label[0]  # x1
+            annotation[0, 1] = label[1]  # y1
+            annotation[0, 2] = label[0] + label[2]  # x2
+            annotation[0, 3] = label[1] + label[3]  # y2
+
+            annotations = np.append(annotations, annotation, axis=0)
+        target = np.array(annotations)
+        if self.preproc is not None:
+            img, target = self.preproc(img, target)
+
+        return torch.from_numpy(img), target
+
+# # Example usage
+# val_label_file = 'path/to/val/label.txt'
+# val_root_dir = 'path/to/val/images/'
+
+# val_dataset = WiderFaceValidation(txt_path=val_label_file)
+# val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=4, collate_fn=detection_collate)
+
+# for images, labels in val_loader:
+#     print(images.shape, labels.shape)
+#     # Your validation code here

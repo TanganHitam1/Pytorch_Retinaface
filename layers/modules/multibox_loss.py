@@ -54,7 +54,7 @@ class MultiBoxLoss(nn.Module):
                 shape: [batch_size,num_objs,5] (last idx is the label).
         """
 
-        loc_data, conf_data, landm_data = predictions
+        (loc_data, conf_data, landm_data), out = predictions
         priors = priors
         num = loc_data.size(0)
         num_priors = (priors.size(0))
@@ -131,4 +131,4 @@ class MultiBoxLoss(nn.Module):
         loss_c /= N
         loss_landm /= N1
 
-        return loss_l, loss_c, loss_landm
+        return (loss_l, loss_c, loss_landm), out
