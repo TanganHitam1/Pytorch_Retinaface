@@ -217,6 +217,7 @@ def train(epoch):
 
         net.train()
         tqdm_train = tqdm(train_loader, desc='Training')
+        i=0
         for images, targets in tqdm_train:
             images = images.cuda()
             targets = [anno.cuda() for anno in targets]
@@ -238,9 +239,12 @@ def train(epoch):
             total = targets[1].size(0)
             correct = (predicted == targets[1]).sum().item()
             acc_train += correct / total
+            i+=1
+            tqdm_train.set_postfix_str(f"Loss: {loss.item():.4f}, Acc: {correct / i:.4f}")
 
         net.eval()
         with torch.no_grad():
+            i=0
             tqdm_val = tqdm(val_loader, desc='Validation')
             for images, targets in tqdm_val:
                 images = images.cuda()
@@ -260,13 +264,15 @@ def train(epoch):
                 total = targets[1].size(0)
                 correct = (predicted == targets[1]).sum().item()
                 acc_val += correct / total
+                i+=1
+                tqdm_val.set_postfix_str(f"Loss: {loss.item():.4f}, Acc: {correct / i:.4f}")
 
         average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train, acc_train], len(train_loader))
         average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val, acc_val], len(val_loader))
         list_train = append_list(average_train, list_train)
         list_val = append_list(average_val, list_val)
 
-        if acc_val >= best_acc_val and loss_values_val <= best_loss_val:
+        if (acc_val >= best_acc_val) and (loss_values_val <= best_loss_val):
             best_acc_val = acc_val
             best_loss_val = loss_values_val
             save_model(net, f"best_{epoch}")
