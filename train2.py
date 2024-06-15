@@ -123,7 +123,7 @@ logger.info('Learning rate: ' + str(initial_lr))
 logger.info('Optimizer: ' + optimizer.__class__.__name__)
 
 curve_path = f'./curve/{name}/b{batch_size}/lr{initial_lr}/opt{optimizer.__class__.__name__}'
-weight_path = f'./weights/{name}/b{batch_size}/lr{initial_lr}/opt{optimizer.__class__.__name__}/'
+weight_path = f'./weights/{name}/b{batch_size}/lr{initial_lr}/opt{optimizer.__class__.__name__}'
 
 if not os.path.exists(curve_path):
     os.makedirs(curve_path)
@@ -157,7 +157,10 @@ def plotting(list_train, list_val, plot_names, batch_size, lr, optimizer_name):
         plt.plot(list_val[i], label='val')
         plt.title(plot_names[i])
         plt.xlabel('Epoch')
-        plt.ylabel('Loss')
+        if i == (len(list_train)-1):
+            plt.ylabel('Accuracy')
+        else:
+            plt.ylabel('Loss')
         plt.legend()
         plt.savefig(f'{curve_path}/{plot_names[i]}_b{batch_size}_lr{lr}_opt{optimizer_name}.png')
         plt.cla()
@@ -167,6 +170,9 @@ def append_list(avg_list, all_list):
         all_list[i].append(avg_list[i])
     return all_list
 
+def save_model(net:RetinaFace, epoch):
+    torch.save(net.state_dict(), f"{weight_path}_{epoch}.pth")
+
 def train(epoch):
     net.train()
     print('Loading Dataset...')
@@ -174,6 +180,7 @@ def train(epoch):
     epoch = int(epoch)
     
     validation_split = 0.2
+    
 
     dataset = WiderFaceDetection(training_dataset, preproc(img_dim, rgb_mean))
     dataset_size = len(dataset)
@@ -197,12 +204,12 @@ def train(epoch):
     list_acc_train, list_acc_val = [], []
     list_train = [list_loss_values_train, list_loc_loss_train, list_conf_loss_train, list_landm_loss_train, list_acc_train]
     list_val = [list_loss_values_val, list_loc_loss_val, list_conf_loss_val, list_landm_loss_val, list_acc_val]
-    
-    
-    plot_names = ['total loss', 'localization loss', 'classification loss', 'landmark loss', 'val total loss', 'val localization loss', 'val classification loss', 'val landmark loss']
-    
+
+    best_acc_val = 0
+    best_loss_val = 10000
+
     tqdm_epoch = tqdm(range(epoch, max_epoch), desc='Epoch')
-    
+
     for epoch in tqdm_epoch:
 
         acc_train, loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train = 0, 0, 0, 0, 0
@@ -226,7 +233,7 @@ def train(epoch):
             loc_loss_train += loss_l.item()
             conf_loss_train += loss_c.item()
             landm_loss_train += loss_landm.item()
-            
+
             _, predicted = torch.max(out[1], -1)
             total = targets[1].size(0)
             correct = (predicted == targets[1]).sum().item()
@@ -248,19 +255,22 @@ def train(epoch):
                 loc_loss_val += loss_l.item()
                 conf_loss_val += loss_c.item()
                 landm_loss_val += loss_landm.item()
-                
+
                 _, predicted = torch.max(out[1], -1)
                 total = targets[1].size(0)
                 correct = (predicted == targets[1]).sum().item()
                 acc_val += correct / total
 
-        average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train], len(train_loader))
-        average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val], len(val_loader))
-        avg_acc_train = acc_train / len(train_loader)
-        avg_acc_val = acc_val / len(val_loader)
+        average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train, acc_train], len(train_loader))
+        average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val, acc_val], len(val_loader))
         list_train = append_list(average_train, list_train)
         list_val = append_list(average_val, list_val)
 
+        if acc_val >= best_acc_val and loss_values_val <= best_loss_val:
+            best_acc_val = acc_val
+            best_loss_val = loss_values_val
+            save_model(net, f"best_{epoch}")
+    save_model(net, "Final")
     return epoch
 
 def adjust_learning_rate(optimizer, gamma, epoch, step_index, iteration, epoch_size):

@@ -97,7 +97,7 @@ if __name__ == '__main__':
     test_dataset = test_dataset.split()
     test_dataset = [img_name for img_name in test_dataset if img_name.endswith('.jpg')]  # Filter only .jpg files
     num_images = len(test_dataset)
-    logger.info(f"Test dataset: {test_dataset}.")
+    # logger.info(f"Test dataset: {test_dataset}.")
 
     _t = {'forward_pass': Timer(), 'misc': Timer()}
 
@@ -128,10 +128,16 @@ if __name__ == '__main__':
         img = img.transpose(2, 0, 1)
         img = torch.from_numpy(img).unsqueeze(0)
         img = img.to(device)
+        logger.info(f"Image shape: {img.shape}.")
         scale = scale.to(device)
 
         _t['forward_pass'].tic()
         (loc, conf, landms), out = net(img)  # forward pass
+        logger.info(f"Loc shape: {loc.shape}.")
+        logger.info(f"Conf shape: {conf.shape}.")
+        logger.info(f"Landms shape: {landms.shape}.")
+        logger.info(f"Loc data shape: {(loc.data).shape}.")
+        logger.info(f"Loc data shape: {(loc.data.squeeze()).shape}.")
         _t['forward_pass'].toc()
         _t['misc'].tic()
         priorbox = PriorBox(cfg, image_size=(im_height, im_width))
@@ -144,8 +150,8 @@ if __name__ == '__main__':
         scores = conf.squeeze(0).data.cpu().numpy()[:, 1]
         landms = decode_landm(landms.data.squeeze(0), prior_data, cfg['variance'])
         scale1 = torch.Tensor([img.shape[3], img.shape[2], img.shape[3], img.shape[2],
-                               img.shape[3], img.shape[2], img.shape[3], img.shape[2],
-                               img.shape[3], img.shape[2]])
+                            img.shape[3], img.shape[2], img.shape[3], img.shape[2],
+                            img.shape[3], img.shape[2]])
         scale1 = scale1.to(device)
         landms = landms * scale1 / resize
         landms = landms.cpu().numpy()
