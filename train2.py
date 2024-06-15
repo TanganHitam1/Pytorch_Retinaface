@@ -224,10 +224,10 @@ def train(epoch):
 
             out = net(images)
 
-            _, predicted = torch.max(out[1], -1)
-            total = targets[1].size(0)
-            correct = (predicted == targets[1]).sum().item()
-            acc_train += correct / total
+            # _, predicted = torch.max(out[1], -1)
+            # total = targets[1].size(0)
+            # correct = (predicted == targets[1]).sum().item()
+            # acc_train += correct / total
 
             optimizer.zero_grad()
             (loss_l, loss_c, loss_landm), out = criterion(out, priors, targets)
@@ -241,7 +241,8 @@ def train(epoch):
             landm_loss_train += loss_landm.item()
 
             i+=1
-            tqdm_train.set_postfix_str(f"Loss: {loss.item():.4f}, Acc: {correct / i:.4f}")
+            # tqdm_train.set_postfix_str(f"Loss: {loss.item():.4f}, Acc: {correct / i:.4f}")
+            tqdm_train.set_postfix_str(f"Loss: {loss.item():.4f}")
 
         net.eval()
         with torch.no_grad():
@@ -253,10 +254,10 @@ def train(epoch):
 
                 out = net(images)
 
-                _, predicted = torch.max(out[1], -1)
-                total = targets[1].size(0)
-                correct = (predicted == targets[1]).sum().item()
-                acc_val += correct / total
+                # _, predicted = torch.max(out[1], -1)
+                # total = targets[1].size(0)
+                # correct = (predicted == targets[1]).sum().item()
+                # acc_val += correct / total
 
                 (loss_l, loss_c, loss_landm), out = criterion(out, priors, targets)
                 loss = cfg['loc_weight'] * loss_l + loss_c + loss_landm
@@ -266,19 +267,25 @@ def train(epoch):
                 conf_loss_val += loss_c.item()
                 landm_loss_val += loss_landm.item()
                 i+=1
-                tqdm_val.set_postfix_str(f"Loss: {loss.item():.4f}, Acc: {correct / i:.4f}")
+                # tqdm_val.set_postfix_str(f"Loss: {loss.item():.4f}, Acc: {correct / i:.4f}")
+                tqdm_val.set_postfix_str(f"Loss: {loss.item():.4f}")
 
-        average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train, acc_train], len(train_loader))
-        average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val, acc_val], len(val_loader))
+        # average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train, acc_train], len(train_loader))
+        # average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val, acc_val], len(val_loader))
+        average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train], len(train_loader))
+        average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val], len(val_loader))
         list_train = append_list(average_train, list_train)
         list_val = append_list(average_val, list_val)
 
-        if (acc_val >= best_acc_val) and (loss_values_val <= best_loss_val):
-            best_acc_val = acc_val
+        # if (acc_val >= best_acc_val) and (loss_values_val <= best_loss_val):
+        #     best_acc_val = acc_val
+        #     best_loss_val = loss_values_val
+        #     save_model(net, f"best_{epoch}")
+        if (loss_values_val <= best_loss_val):
             best_loss_val = loss_values_val
             save_model(net, f"best_{epoch}")
-            
-        tqdm_epoch.set_postfix_str(f"Loss: {average_train[0]:.4f}, Acc: {average_train[-1]:.4f}, Val Loss: {average_val[0]:.4f}, Val Acc: {average_val[-1]:.4f}")
+
+        tqdm_epoch.set_postfix_str(f"Loss: {average_train[0]:.4f}, Val Loss: {average_val[0]:.4f}")
     save_model(net, "Final")
     return epoch
 
