@@ -16,12 +16,14 @@ from matplotlib import pyplot as plt
 import numpy as np
 import config_logger
 from tqdm.auto import tqdm
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+import pandas as pd
 
 parser = argparse.ArgumentParser(description='Retinaface Training')
 parser.add_argument('--training_dataset', default='./data/widerface/train/label.txt', help='Training dataset directory')
 # parser.add_argument('--validating_dataset', default='./data/widerface/test/label.txt', help='validation dataset directory')
 parser.add_argument('--network', default='resnet50', help='Backbone network mobile0.25 or resnet50')
-parser.add_argument('--num_workers', default=1, type=int, help='Number of workers used in dataloading')
+parser.add_argument('--num_workers', default=2, type=int, help='Number of workers used in dataloading')
 parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--resume_net', default=None, help='resume net for retraining')
@@ -29,7 +31,7 @@ parser.add_argument('--resume_epoch', default=0, type=int, help='resume iter for
 parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
 parser.add_argument('--save_folder', default='./weights/', help='Location to save checkpoint models')
-parser.add_argument('--batch_size', default=4, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=8, type=int, help='Batch size for training')
 parser.add_argument('--optimizer', default='sgd', help='Optimizer for training')
 
 args = parser.parse_args()
@@ -107,6 +109,8 @@ elif args.optimizer == 'asgd':
 else:
     raise ValueError('Invalid optimizer')
 
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=5)
+
 criterion = MultiBoxLoss(num_classes, 0.35, True, 0, True, 7, 0.35, False)
 
 priorbox = PriorBox(cfg, image_size=(img_dim, img_dim))
@@ -132,14 +136,10 @@ if not os.path.exists(weight_path):
 
 epoch = 0 + args.resume_epoch
 
-def curve_plot(fig_name, batch_size, lr, optimizer_name, var_name):
-    np.savetxt(f'{curve_path}/{var_name}_b{batch_size}_lr{lr}_opt{optimizer_name}.txt', var_name)
-    plt.plot(var_name)
-    plt.title(f'{fig_name}')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.savefig(f'{curve_path}/{fig_name}_b{batch_size}_lr{lr}_opt{optimizer_name}.png')
-    plt.cla()
+def append_list(list_train, list_val, avg_train, avg_val):
+    list_train.append(avg_train)
+    list_val.append(avg_val)
+    return list_train, list_val
 
 def avg(xx, y):
     average = []
@@ -147,28 +147,36 @@ def avg(xx, y):
         average.append(x/y)
     return average
 
-def saving_txt(var_list, batch_size, lr, optimizer_name):
-    for var_name in var_list:
-        np.savetxt(f'{curve_path}/{var_name}_b{batch_size}_lr{lr}_opt{optimizer_name}.txt', var_name)
+def saving_txt(batch_size, lr, optimizer_name, train_list, val_list):
+    tltrain, tlval, lltrain, llval, cltrain, clval, lmltrain, lmlval, acc_train, acc_val = [], [], [], [], [], [], [], [], [], []
+    for i, (train, val) in enumerate(zip(train_list, val_list)):
+        tltrain.append(train[0])
+        tlval.append(val[0])
+        lltrain.append(train[1])
+        llval.append(val[1])
+        cltrain.append(train[2])
+        clval.append(val[2])
+        lmltrain.append(train[3])
+        lmlval.append(val[3])
+        # acc_train.append(train[4])
+        # acc_val.append(val[4])
+    all_list = [tltrain, tlval, lltrain, llval, cltrain, clval, lmltrain, lmlval]
+    names = ['Train Loss', 'Validation Loss', 'Train Loc Loss', 'Validation Loc Loss', 'Train Conf Loss', 'Validation Conf Loss', 'Train Landm Loss', 'Validation Landm Loss']
+    i=0
+    for list in all_list:
+        np.savetxt(f'{curve_path}/{names[i]}_b{batch_size}_lr{lr}_opt{optimizer_name}.txt', list)
+        i+=1
 
 def plotting(list_train, list_val, plot_names, batch_size, lr, optimizer_name):
-    for i in range(len(list_train)):
-        plt.plot(list_train[i], label='train')
-        plt.plot(list_val[i], label='val')
-        plt.title(plot_names[i])
+    for i, (train, val) in enumerate(zip(list_train, list_val)):
+        plt.plot(train, label='Train')
+        plt.plot(val, label='Validation')
+        plt.title(f'{plot_names[i]}')
         plt.xlabel('Epoch')
-        if i == (len(list_train)-1):
-            plt.ylabel('Accuracy')
-        else:
-            plt.ylabel('Loss')
+        plt.ylabel('Value')
         plt.legend()
         plt.savefig(f'{curve_path}/{plot_names[i]}_b{batch_size}_lr{lr}_opt{optimizer_name}.png')
-        plt.cla()
-
-def append_list(avg_list, all_list):
-    for i in range(len(avg_list)):
-        all_list[i].append(avg_list[i])
-    return all_list
+        plt.close()
 
 def save_model(net:RetinaFace, epoch):
     torch.save(net.state_dict(), f"{weight_path}_{epoch}.pth")
@@ -199,11 +207,11 @@ def train(epoch):
 
     # epoch_size = math.ceil(len(dataset) / batch_size)
 
-    list_loss_values_train, list_loc_loss_train, list_conf_loss_train, list_landm_loss_train = [], [], [], []
-    list_loss_values_val, list_loc_loss_val, list_conf_loss_val, list_landm_loss_val = [], [], [], []
-    list_acc_train, list_acc_val = [], []
-    list_train = [list_loss_values_train, list_loc_loss_train, list_conf_loss_train, list_landm_loss_train, list_acc_train]
-    list_val = [list_loss_values_val, list_loc_loss_val, list_conf_loss_val, list_landm_loss_val, list_acc_val]
+    # list_loss_values_train, list_loc_loss_train, list_conf_loss_train, list_landm_loss_train = [], [], [], []
+    # list_loss_values_val, list_loc_loss_val, list_conf_loss_val, list_landm_loss_val = [], [], [], []
+    # list_acc_train, list_acc_val = [], []
+    list_train = []
+    list_val = []
 
     best_acc_val = 0
     best_loss_val = 10000
@@ -214,9 +222,11 @@ def train(epoch):
 
         acc_train, loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train = 0, 0, 0, 0, 0
         acc_val, loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val = 0, 0, 0, 0, 0
+        
+        df = pd.DataFrame(columns=['Loss', 'Loc Loss', 'Conf Loss', 'Landm Loss', 'Accuracy'])
 
         net.train()
-        tqdm_train = tqdm(train_loader, desc='Training')
+        tqdm_train = tqdm(train_loader, desc='Training', leave=False)
         i=0
         for images, targets in tqdm_train:
             images = images.cuda()
@@ -232,6 +242,11 @@ def train(epoch):
             optimizer.zero_grad()
             (loss_l, loss_c, loss_landm), out = criterion(out, priors, targets)
             loss = cfg['loc_weight'] * loss_l + loss_c + loss_landm
+            
+            l2_lambda = 0.001
+            l2_norm = sum(p.pow(2.0).sum() for p in net.parameters())
+            loss = loss + l2_lambda * l2_norm
+            
             loss.backward()
             optimizer.step()
 
@@ -247,7 +262,7 @@ def train(epoch):
         net.eval()
         with torch.no_grad():
             i=0
-            tqdm_val = tqdm(val_loader, desc='Validation')
+            tqdm_val = tqdm(val_loader, desc='Validation', leave=False)
             for images, targets in tqdm_val:
                 images = images.cuda()
                 targets = [anno.cuda() for anno in targets]
@@ -270,12 +285,17 @@ def train(epoch):
                 # tqdm_val.set_postfix_str(f"Loss: {loss.item():.4f}, Acc: {correct / i:.4f}")
                 tqdm_val.set_postfix_str(f"Loss: {loss.item():.4f}")
 
+        scheduler.step(loss)
+
         # average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train, acc_train], len(train_loader))
         # average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val, acc_val], len(val_loader))
         average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train], len(train_loader))
         average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val], len(val_loader))
-        list_train = append_list(average_train, list_train)
-        list_val = append_list(average_val, list_val)
+        list_train, list_val = append_list(list_train, list_val, average_train, average_val)
+
+        saving_txt(batch_size, initial_lr, optimizer.__class__.__name__, list_train, list_val)
+        plotting(list_train, list_val, ['Train Loss', 'Validation Loss', 'Train Loc Loss', 'Validation Loc Loss', 'Train Conf Loss', 'Validation Conf Loss', 'Train Landm Loss', 'Validation Landm Loss'],
+                batch_size, initial_lr, optimizer.__class__.__name__)
 
         # if (acc_val >= best_acc_val) and (loss_values_val <= best_loss_val):
         #     best_acc_val = acc_val
