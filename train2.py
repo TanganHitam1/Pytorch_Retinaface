@@ -166,17 +166,21 @@ def saving_txt(batch_size, lr, optimizer_name, train_list, val_list):
     for list in all_list:
         np.savetxt(f'{curve_path}/{names[i]}_b{batch_size}_lr{lr}_opt{optimizer_name}.txt', list)
         i+=1
+    return all_list
 
-def plotting(list_train, list_val, plot_names, batch_size, lr, optimizer_name):
-    for i, (train, val) in enumerate(zip(list_train, list_val)):
-        plt.plot(train, label='Train')
-        plt.plot(val, label='Validation')
-        plt.title(f'{plot_names[i]}')
+def plotting(all_list, plot_names, batch_size, lr, optimizer_name):
+    i=0
+    for name in plot_names:
+        plt.figure()
+        plt.plot(all_list[i], label='Train')
+        plt.plot(all_list[i+1], label='Validation')
+        plt.title(name)
         plt.xlabel('Epoch')
-        plt.ylabel('Value')
+        plt.ylabel('Loss')
         plt.legend()
-        plt.savefig(f'{curve_path}/{plot_names[i]}_b{batch_size}_lr{lr}_opt{optimizer_name}.png')
+        plt.savefig(f'{curve_path}/{name}_b{batch_size}_lr{lr}_opt{optimizer_name}.png')
         plt.close()
+        i+=2
 
 def save_model(net:RetinaFace, epoch):
     torch.save(net.state_dict(), f"{weight_path}_{epoch}.pth")
@@ -223,7 +227,7 @@ def train(epoch):
         acc_train, loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train = 0, 0, 0, 0, 0
         acc_val, loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val = 0, 0, 0, 0, 0
         
-        df = pd.DataFrame(columns=['Loss', 'Loc Loss', 'Conf Loss', 'Landm Loss', 'Accuracy'])
+        names = ['Loss', 'Loc Loss', 'Conf Loss', 'Landm Loss']
 
         net.train()
         tqdm_train = tqdm(train_loader, desc='Training', leave=False)
@@ -293,8 +297,8 @@ def train(epoch):
         average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val], len(val_loader))
         list_train, list_val = append_list(list_train, list_val, average_train, average_val)
 
-        saving_txt(batch_size, initial_lr, optimizer.__class__.__name__, list_train, list_val)
-        plotting(list_train, list_val, ['Train Loss', 'Validation Loss', 'Train Loc Loss', 'Validation Loc Loss', 'Train Conf Loss', 'Validation Conf Loss', 'Train Landm Loss', 'Validation Landm Loss'],
+        all_list = saving_txt(batch_size, initial_lr, optimizer.__class__.__name__, list_train, list_val)
+        plotting(all_list, names,
                 batch_size, initial_lr, optimizer.__class__.__name__)
 
         # if (acc_val >= best_acc_val) and (loss_values_val <= best_loss_val):
