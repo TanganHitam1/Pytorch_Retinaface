@@ -16,7 +16,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import config_logger
 from tqdm.auto import tqdm
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim import lr_scheduler
 import pandas as pd
 
 parser = argparse.ArgumentParser(description='Retinaface Training')
@@ -24,15 +24,16 @@ parser.add_argument('--training_dataset', default='./data/widerface/train/label.
 # parser.add_argument('--validating_dataset', default='./data/widerface/test/label.txt', help='validation dataset directory')
 parser.add_argument('--network', default='resnet50', help='Backbone network mobile0.25 or resnet50')
 parser.add_argument('--num_workers', default=2, type=int, help='Number of workers used in dataloading')
-parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, help='initial learning rate')
+parser.add_argument('--lr', '--learning-rate', default=1e-5, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
-parser.add_argument('--resume_net', default=None, help='resume net for retraining')
-parser.add_argument('--resume_epoch', default=0, type=int, help='resume iter for retraining')
+# parser.add_argument('--resume_net', default=None, help='resume net for retraining')
+# parser.add_argument('--resume_epoch', default=0, type=int, help='resume iter for retraining')
 parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
 parser.add_argument('--save_folder', default='./weights/', help='Location to save checkpoint models')
 parser.add_argument('--batch_size', default=8, type=int, help='Batch size for training')
-parser.add_argument('--optimizer', default='sgd', help='Optimizer for training')
+parser.add_argument('--optimizer', default='adamax', help='Optimizer for training')
+parser.add_argument('--total_epoch', default=10, type=int, help='Total epoch for training')
 
 args = parser.parse_args()
 
@@ -49,7 +50,7 @@ num_classes = 2
 img_dim = cfg['image_size']
 num_gpu = cfg['ngpu']
 batch_size = args.batch_size
-max_epoch = cfg['epoch']
+max_epoch = args.total_epoch
 gpu_train = cfg['gpu_train']
 
 num_workers = args.num_workers
@@ -64,20 +65,20 @@ save_folder = args.save_folder
 
 net = RetinaFace(cfg=cfg)
 
-if args.resume_net is not None:
-    lr = 1e-4
-    print('Loading resume network...')
-    state_dict = torch.load(args.resume_net)
-    from collections import OrderedDict
-    new_state_dict = OrderedDict()
-    for k, v in state_dict.items():
-        head = k[:7]
-        if head == 'module.':
-            name = k[7:] # remove `module.`
-        else:
-            name = k
-        new_state_dict[name] = v
-    net.load_state_dict(new_state_dict)
+# if args.resume_net is not None:
+#     lr = 1e-4
+#     print('Loading resume network...')
+#     state_dict = torch.load(args.resume_net)
+#     from collections import OrderedDict
+#     new_state_dict = OrderedDict()
+#     for k, v in state_dict.items():
+#         head = k[:7]
+#         if head == 'module.':
+#             name = k[7:] # remove `module.`
+#         else:
+#             name = k
+#         new_state_dict[name] = v
+#     net.load_state_dict(new_state_dict)
 
 if num_gpu > 1 and gpu_train:
     net = torch.nn.DataParallel(net).cuda()
@@ -92,24 +93,10 @@ elif args.optimizer == 'sgd':
     optimizer = optim.SGD(net.parameters(), lr=initial_lr, momentum=momentum, weight_decay=weight_decay)
 elif args.optimizer == 'adamax':
     optimizer = optim.Adamax(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
-elif args.optimizer == 'adadelta':
-    optimizer = optim.Adadelta(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
-elif args.optimizer == 'adagrad':
-    optimizer = optim.Adagrad(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
-elif args.optimizer == 'rmsprop':
-    optimizer = optim.RMSprop(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
-elif args.optimizer == 'adamw':
-    optimizer = optim.AdamW(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
-elif args.optimizer == 'lbfgs':
-    optimizer = optim.LBFGS(net.parameters(), lr=initial_lr)
-elif args.optimizer == 'rprop':
-    optimizer = optim.Rprop(net.parameters(), lr=initial_lr)
-elif args.optimizer == 'asgd':
-    optimizer = optim.ASGD(net.parameters(), lr=initial_lr, weight_decay=weight_decay)
 else:
     raise ValueError('Invalid optimizer')
 
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=5)
+scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[25, 50, 75], gamma=0.1)
 
 criterion = MultiBoxLoss(num_classes, 0.35, True, 0, True, 7, 0.35, False)
 
@@ -120,21 +107,22 @@ with torch.no_grad():
 
 name = cfg['name']
 
-logger = config_logger.logger_config(f'./log/{name}_train_b{batch_size}_lr{initial_lr}_opt{optimizer.__class__.__name__}.txt')
+logger = config_logger.logger_config(f'./log/{name}_epoch{max_epoch}_train_b{batch_size}_lr{initial_lr}_opt{optimizer.__class__.__name__}.txt')
 logger.info('Start training...')
 logger.info('Batch size: ' + str(batch_size))
 logger.info('Learning rate: ' + str(initial_lr))
 logger.info('Optimizer: ' + optimizer.__class__.__name__)
 
-curve_path = f'./curve/{name}/b{batch_size}/lr{initial_lr}/opt{optimizer.__class__.__name__}'
-weight_path = f'./weights/{name}/b{batch_size}/lr{initial_lr}/opt{optimizer.__class__.__name__}'
+curve_path = f'./curve/{name}_epoch{max_epoch}_b{batch_size}_lr{initial_lr}_opt{optimizer.__class__.__name__}'
+weight_path = f'./weights/{name}_epoch{max_epoch}_b{batch_size}_lr{initial_lr}_opt{optimizer.__class__.__name__}/{name}_epoch{max_epoch}_b{batch_size}_lr{initial_lr}_opt{optimizer.__class__.__name__}'
 
 if not os.path.exists(curve_path):
     os.makedirs(curve_path)
 if not os.path.exists(weight_path):
     os.makedirs(weight_path)
 
-epoch = 0 + args.resume_epoch
+# epoch = 0 + args.resume_epoch
+epoch = 0
 
 def append_list(list_train, list_val, avg_train, avg_val):
     list_train.append(avg_train)
@@ -253,6 +241,7 @@ def train(epoch):
             
             loss.backward()
             optimizer.step()
+            
 
             loss_values_train += loss.item()
             loc_loss_train += loss_l.item()
@@ -289,7 +278,7 @@ def train(epoch):
                 # tqdm_val.set_postfix_str(f"Loss: {loss.item():.4f}, Acc: {correct / i:.4f}")
                 tqdm_val.set_postfix_str(f"Loss: {loss.item():.4f}")
 
-        scheduler.step(loss)
+        scheduler.step()
 
         # average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train, acc_train], len(train_loader))
         # average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val, acc_val], len(val_loader))
