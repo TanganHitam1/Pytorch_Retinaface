@@ -1,0 +1,4 @@
+2024-06-21 11:32:02,686 - config_logger - INFO : Start training...
+2024-06-21 11:32:02,686 - config_logger - INFO : Batch size: 4
+2024-06-21 11:32:02,686 - config_logger - INFO : Learning rate: 0.0001
+2024-06-21 11:32:02,686 - config_logger - INFO : Optimizer: SGD

@@ -60,3 +60,14 @@ python train2.py --lr 1e-4 --optimizer adam --batch_size 4 --total_epoch 30
 python train2.py --network mobile0.25 --lr 1e-4 --batch_size 4 --total_epoch 30
 python train2.py --network mobile0.25 --optimizer sgd --lr 1e-4 --batch_size 4 --total_epoch 30
 python train2.py --network mobile0.25 --optimizer adam --lr 1e-4 --batch_size 4 --total_epoch 30
+
+
+
+
+python train2.py --network mobile0.25
+python train2.py --network mobile0.25 --lr 1e-4
+python train2.py
+python train2.py --lr 1e-4
+
+python train2.py --network mobile0.25 --lr 1e-3
+python train2.py --lr 1e-3

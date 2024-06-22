@@ -19,6 +19,8 @@ from tqdm.auto import tqdm
 from torch.optim import lr_scheduler
 import pandas as pd
 
+from utils.box_utils import decode
+
 parser = argparse.ArgumentParser(description='Retinaface Training')
 parser.add_argument('--training_dataset', default='./data/widerface/train/label.txt', help='Training dataset directory')
 # parser.add_argument('--validating_dataset', default='./data/widerface/test/label.txt', help='validation dataset directory')
@@ -32,7 +34,7 @@ parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight dec
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
 parser.add_argument('--save_folder', default='./weights/', help='Location to save checkpoint models')
 parser.add_argument('--batch_size', default=8, type=int, help='Batch size for training')
-parser.add_argument('--optimizer', default='adamax', help='Optimizer for training')
+parser.add_argument('--optimizer', default='adam', help='Optimizer for training')
 parser.add_argument('--total_epoch', default=10, type=int, help='Total epoch for training')
 
 args = parser.parse_args()
@@ -96,7 +98,7 @@ elif args.optimizer == 'adamax':
 else:
     raise ValueError('Invalid optimizer')
 
-scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[25, 50, 75], gamma=0.1)
+scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[max_epoch*.7, max_epoch*.9], gamma=0.1)
 
 criterion = MultiBoxLoss(num_classes, 0.35, True, 0, True, 7, 0.35, False)
 
@@ -146,10 +148,10 @@ def saving_txt(batch_size, lr, optimizer_name, train_list, val_list):
         clval.append(val[2])
         lmltrain.append(train[3])
         lmlval.append(val[3])
-        # acc_train.append(train[4])
-        # acc_val.append(val[4])
-    all_list = [tltrain, tlval, lltrain, llval, cltrain, clval, lmltrain, lmlval]
-    names = ['Train Loss', 'Validation Loss', 'Train Loc Loss', 'Validation Loc Loss', 'Train Conf Loss', 'Validation Conf Loss', 'Train Landm Loss', 'Validation Landm Loss']
+        acc_train.append(train[4])
+        acc_val.append(val[4])
+    all_list = [tltrain, tlval, lltrain, llval, cltrain, clval, lmltrain, lmlval, acc_train, acc_val]
+    names = ['Train Loss', 'Validation Loss', 'Train Loc Loss', 'Validation Loc Loss', 'Train Conf Loss', 'Validation Conf Loss', 'Train Landm Loss', 'Validation Landm Loss', 'Train Accuracy', 'Validation Accuracy']
     i=0
     for list in all_list:
         np.savetxt(f'{curve_path}/{names[i]}_b{batch_size}_lr{lr}_opt{optimizer_name}.txt', list)
@@ -164,7 +166,10 @@ def plotting(all_list, plot_names, batch_size, lr, optimizer_name):
         plt.plot(all_list[i+1], label='Validation')
         plt.title(name)
         plt.xlabel('Epoch')
-        plt.ylabel('Loss')
+        if name == 'Loss':
+            plt.ylabel('Loss')
+        else:
+            plt.ylabel('Accuracy')
         plt.legend()
         plt.savefig(f'{curve_path}/{name}_b{batch_size}_lr{lr}_opt{optimizer_name}.png')
         plt.close()
@@ -172,6 +177,46 @@ def plotting(all_list, plot_names, batch_size, lr, optimizer_name):
 
 def save_model(net:RetinaFace, epoch):
     torch.save(net.state_dict(), f"{weight_path}_{epoch}.pth")
+
+def compute_iou(box1, box2):
+    # Ensure that box1 and box2 are tensors with compatible dimensions
+    box1 = box1.unsqueeze(1)  # Add an extra dimension to box1
+    box2 = box2.unsqueeze(0)  # Add an extra dimension to box2
+    
+    # Get the coordinates of the intersection rectangle
+    x1 = torch.max(box1[:, :, 0], box2[:, :, 0])
+    y1 = torch.max(box1[:, :, 1], box2[:, :, 1])
+    x2 = torch.min(box1[:, :, 2], box2[:, :, 2])
+    y2 = torch.min(box1[:, :, 3], box2[:, :, 3])
+    
+    # Intersection area
+    inter_area = torch.clamp(x2 - x1, min=0) * torch.clamp(y2 - y1, min=0)
+    
+    # Union Area
+    box1_area = (box1[:, :, 2] - box1[:, :, 0]) * (box1[:, :, 3] - box1[:, :, 1])
+    box2_area = (box2[:, :, 2] - box2[:, :, 0]) * (box2[:, :, 3] - box2[:, :, 1])
+    union_area = box1_area + box2_area - inter_area
+    
+    # Intersection over Union
+    iou = inter_area / union_area
+    return iou
+
+
+def get_boxes(output, priors, threshold, num_classes):
+    (loc, conf, _), _ = output
+    boxes = []
+    for i in range(loc.size(0)):
+        decoded_boxes = decode(loc[i], priors, cfg['variance'])
+        conf_scores = conf[i].clone()
+        for cl in range(1, num_classes):
+            c_mask = conf_scores[:, cl].gt(threshold)
+            scores = conf_scores[c_mask, cl]
+            if scores.size(0) == 0:
+                continue
+            l_mask = c_mask.unsqueeze(1).expand_as(decoded_boxes)
+            box = decoded_boxes[l_mask].view(-1, 4)
+            boxes.append((box, scores))
+    return boxes
 
 def train(epoch):
     net.train()
@@ -214,8 +259,8 @@ def train(epoch):
 
         acc_train, loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train = 0, 0, 0, 0, 0
         acc_val, loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val = 0, 0, 0, 0, 0
-        
-        names = ['Loss', 'Loc Loss', 'Conf Loss', 'Landm Loss']
+
+        names = ['Loss', 'Loc Loss', 'Conf Loss', 'Landm Loss', 'Accuracy']
 
         net.train()
         tqdm_train = tqdm(train_loader, desc='Training', leave=False)
@@ -226,6 +271,34 @@ def train(epoch):
 
             out = net(images)
 
+            priors = PriorBox(cfg, image_size=(images.shape[2], images.shape[3])).forward().cuda()
+            pred_boxes = get_boxes(out, priors, 0.5, num_classes)
+
+            all_ious = []
+
+            for idx in range(len(targets)):
+                if idx >= len(pred_boxes):
+                    logger.error(f"Index {idx} out of range for pred_boxes of length {len(pred_boxes)}")
+                    all_ious.append(torch.tensor([0.0]).cuda())
+                    continue
+
+                logger.debug(f"Processing target {idx}/{len(targets)} and pred_box {idx}/{len(pred_boxes)}")
+
+                if len(pred_boxes[idx][0]) == 0:
+                    logger.warning(f"No pred_boxes for target {idx}, skipping...")
+                    continue
+
+                iou = compute_iou(pred_boxes[idx][0], targets[idx][:, :4])
+                all_ious.append(iou.max(dim=1).values)  # Take the maximum IoU for each predicted box
+
+            if all_ious:
+                all_ious = torch.cat(all_ious)  # Concatenate all IoUs
+                iou_percentages = all_ious * 100  # Convert IoU to percentage
+                mean_iou_percentage = iou_percentages.mean().item()  # Calculate the mean IoU percentage
+            else:
+                mean_iou_percentage = 0  # Calculate the mean IoU percentage
+
+            # print(f'Mean IoU Percentage: {mean_iou_percentage:.2f}%')
             # _, predicted = torch.max(out[1], -1)
             # total = targets[1].size(0)
             # correct = (predicted == targets[1]).sum().item()
@@ -234,7 +307,7 @@ def train(epoch):
             optimizer.zero_grad()
             (loss_l, loss_c, loss_landm), out = criterion(out, priors, targets)
             loss = cfg['loc_weight'] * loss_l + loss_c + loss_landm
-            
+
             l2_lambda = 0.001
             l2_norm = sum(p.pow(2.0).sum() for p in net.parameters())
             loss = loss + l2_lambda * l2_norm
@@ -247,10 +320,11 @@ def train(epoch):
             loc_loss_train += loss_l.item()
             conf_loss_train += loss_c.item()
             landm_loss_train += loss_landm.item()
+            acc_train += mean_iou_percentage
 
             i+=1
             # tqdm_train.set_postfix_str(f"Loss: {loss.item():.4f}, Acc: {correct / i:.4f}")
-            tqdm_train.set_postfix_str(f"Loss: {loss.item():.4f}")
+            tqdm_train.set_postfix_str(f"Loss: {loss.item():.4f}, Mean IoU: {mean_iou_percentage:.2f}%")
 
         net.eval()
         with torch.no_grad():
@@ -261,6 +335,34 @@ def train(epoch):
                 targets = [anno.cuda() for anno in targets]
 
                 out = net(images)
+
+                priors = PriorBox(cfg, image_size=(images.shape[2], images.shape[3])).forward().cuda()
+                pred_boxes = get_boxes(out, priors, 0.5, num_classes)
+
+                all_ious = []
+
+                for idx in range(len(targets)):
+                    if idx >= len(pred_boxes):
+                        logger.error(f"Index {idx} out of range for pred_boxes of length {len(pred_boxes)}")
+                        all_ious.append(torch.tensor([0.0]).cuda())
+                        continue
+
+                    logger.debug(f"Processing target {idx}/{len(targets)} and pred_box {idx}/{len(pred_boxes)}")
+
+                    if len(pred_boxes[idx][0]) == 0:
+                        logger.warning(f"No pred_boxes for target {idx}, skipping...")
+                        all_ious.append(torch.tensor([0.0]).cuda())
+                        continue
+
+                    iou = compute_iou(pred_boxes[idx][0], targets[idx][:, :4])
+                    all_ious.append(iou.max(dim=1).values)  # Take the maximum IoU for each predicted box
+
+                if all_ious:
+                    all_ious = torch.cat(all_ious)  # Concatenate all IoUs
+                    iou_percentages = all_ious * 100  # Convert IoU to percentage
+                    mean_iou_percentage = iou_percentages.mean().item()  # Calculate the mean IoU percentage
+                else:
+                    mean_iou_percentage = 0  # Calculate the mean IoU percentage
 
                 # _, predicted = torch.max(out[1], -1)
                 # total = targets[1].size(0)
@@ -274,31 +376,32 @@ def train(epoch):
                 loc_loss_val += loss_l.item()
                 conf_loss_val += loss_c.item()
                 landm_loss_val += loss_landm.item()
+                acc_val += mean_iou_percentage
                 i+=1
                 # tqdm_val.set_postfix_str(f"Loss: {loss.item():.4f}, Acc: {correct / i:.4f}")
-                tqdm_val.set_postfix_str(f"Loss: {loss.item():.4f}")
+                tqdm_val.set_postfix_str(f"Loss: {loss.item():.4f}, Mean IoU: {mean_iou_percentage:.2f}%")
 
         scheduler.step()
 
-        # average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train, acc_train], len(train_loader))
-        # average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val, acc_val], len(val_loader))
-        average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train], len(train_loader))
-        average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val], len(val_loader))
+        average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train, acc_train], len(train_loader))
+        average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val, acc_val], len(val_loader))
+        # average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train], len(train_loader))
+        # average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val], len(val_loader))
         list_train, list_val = append_list(list_train, list_val, average_train, average_val)
 
         all_list = saving_txt(batch_size, initial_lr, optimizer.__class__.__name__, list_train, list_val)
         plotting(all_list, names,
                 batch_size, initial_lr, optimizer.__class__.__name__)
 
-        # if (acc_val >= best_acc_val) and (loss_values_val <= best_loss_val):
-        #     best_acc_val = acc_val
-        #     best_loss_val = loss_values_val
-        #     save_model(net, f"best_{epoch}")
-        if (loss_values_val <= best_loss_val):
+        if (acc_val >= best_acc_val) and (loss_values_val <= best_loss_val):
+            best_acc_val = acc_val
             best_loss_val = loss_values_val
             save_model(net, f"best_{epoch}")
+        # if (loss_values_val <= best_loss_val):
+        #     best_loss_val = loss_values_val
+        #     save_model(net, f"best_{epoch}")
 
-        tqdm_epoch.set_postfix_str(f"Loss: {average_train[0]:.4f}, Val Loss: {average_val[0]:.4f}")
+        tqdm_epoch.set_postfix_str(f"Loss: {average_train[0]:.4f}, Val Loss: {average_val[0]:.4f}, Acc: {average_train[-1]:.2f}%, Val Acc: {average_val[-1]:.2f}%")
     save_model(net, "Final")
     return epoch
 
