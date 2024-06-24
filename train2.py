@@ -98,7 +98,7 @@ elif args.optimizer == 'adamax':
 else:
     raise ValueError('Invalid optimizer')
 
-scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[max_epoch*.7, max_epoch*.9], gamma=0.1)
+scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[round(max_epoch*.7), round(max_epoch*.9)], gamma=0.1)
 
 criterion = MultiBoxLoss(num_classes, 0.35, True, 0, True, 7, 0.35, False)
 
