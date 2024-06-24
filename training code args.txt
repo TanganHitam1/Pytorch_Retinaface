@@ -1,70 +1,7 @@
-python train2.py --lr 1e-4
-python train2.py --lr 1e-4 --optimizer sgd
+conda activate retinaface
+python train2.py --network mobile0.25 --lr 1e-3 --optimizer adam
+python train2.py --network mobile0.25 --lr 1e-3 --optimizer adamax
+python train2.py --network mobile0.25 --lr 1e-3 --optimizer sgd
 python train2.py --lr 1e-4 --optimizer adam
-python train2.py --network mobile0.25 --lr 1e-4
-python train2.py --network mobile0.25 --optimizer sgd --lr 1e-4
-python train2.py --network mobile0.25 --optimizer adam --lr 1e-4
-python train2.py --lr 1e-4 --batch_size 4
-python train2.py --lr 1e-4 --optimizer sgd --batch_size 4
-python train2.py --lr 1e-4 --optimizer adam --batch_size 4
-python train2.py --network mobile0.25 --lr 1e-4 --batch_size 4
-python train2.py --network mobile0.25 --optimizer sgd --lr 1e-4 --batch_size 4
-python train2.py --network mobile0.25 --optimizer adam --lr 1e-4 --batch_size 4
-
-python train2.py --total_epoch 20
-python train2.py --optimizer sgd --total_epoch 20
-python train2.py --optimizer adam --total_epoch 20
-python train2.py --network mobile0.25 --total_epoch 20
-python train2.py --network mobile0.25 --optimizer sgd --total_epoch 20
-python train2.py --network mobile0.25 --optimizer adam --total_epoch 20
-python train2.py --batch_size 4 --total_epoch 20
-python train2.py --optimizer sgd --batch_size 4 --total_epoch 20
-python train2.py --optimizer adam --batch_size 4 --total_epoch 20
-python train2.py --network mobile0.25 --batch_size 4 --total_epoch 20
-python train2.py --network mobile0.25 --optimizer sgd --batch_size 4 --total_epoch 20
-python train2.py --network mobile0.25 --optimizer adam --batch_size 4 --total_epoch 20
-python train2.py --lr 1e-4 --total_epoch 20
-python train2.py --lr 1e-4 --optimizer sgd --total_epoch 20
-python train2.py --lr 1e-4 --optimizer adam --total_epoch 20
-python train2.py --network mobile0.25 --lr 1e-4 --total_epoch 20
-python train2.py --network mobile0.25 --optimizer sgd --lr 1e-4 --total_epoch 20
-python train2.py --network mobile0.25 --optimizer adam --lr 1e-4 --total_epoch 20
-python train2.py --lr 1e-4 --batch_size 4 --total_epoch 20
-python train2.py --lr 1e-4 --optimizer sgd --batch_size 4 --total_epoch 20
-python train2.py --lr 1e-4 --optimizer adam --batch_size 4 --total_epoch 20
-python train2.py --network mobile0.25 --lr 1e-4 --batch_size 4 --total_epoch 20
-python train2.py --network mobile0.25 --optimizer sgd --lr 1e-4 --batch_size 4 --total_epoch 20
-python train2.py --network mobile0.25 --optimizer adam --lr 1e-4 --batch_size 4 --total_epoch 20
-
-python train2.py --total_epoch 30
-python train2.py --optimizer sgd --total_epoch 30
-python train2.py --optimizer adam --total_epoch 30
-python train2.py --network mobile0.25 --total_epoch 30
-python train2.py --network mobile0.25 --optimizer sgd --total_epoch 30
-python train2.py --network mobile0.25 --optimizer adam --total_epoch 30
-python train2.py --batch_size 4 --total_epoch 30
-python train2.py --optimizer sgd --batch_size 4 --total_epoch 30
-python train2.py --optimizer adam --batch_size 4 --total_epoch 30
-python train2.py --network mobile0.25 --batch_size 4 --total_epoch 30
-python train2.py --network mobile0.25 --optimizer sgd --batch_size 4 --total_epoch 30
-python train2.py --network mobile0.25 --optimizer adam --batch_size 4 --total_epoch 30
-python train2.py --lr 1e-4 --total_epoch 30
-python train2.py --lr 1e-4 --optimizer sgd --total_epoch 30
-python train2.py --lr 1e-4 --optimizer adam --total_epoch 30
-python train2.py --network mobile0.25 --lr 1e-4 --total_epoch 30
-python train2.py --network mobile0.25 --optimizer sgd --lr 1e-4 --total_epoch 30
-python train2.py --network mobile0.25 --optimizer adam --lr 1e-4 --total_epoch 30
-python train2.py --lr 1e-4 --batch_size 4 --total_epoch 30
-python train2.py --lr 1e-4 --optimizer sgd --batch_size 4 --total_epoch 30
-python train2.py --lr 1e-4 --optimizer adam --batch_size 4 --total_epoch 30
-python train2.py --network mobile0.25 --lr 1e-4 --batch_size 4 --total_epoch 30
-python train2.py --network mobile0.25 --optimizer sgd --lr 1e-4 --batch_size 4 --total_epoch 30
-python train2.py --network mobile0.25 --optimizer adam --lr 1e-4 --batch_size 4 --total_epoch 30
-
-
-
-
-python train2.py --network mobile0.25 --batch_size 4
-python train2.py --network mobile0.25 --lr 1e-4 --batch_size 4
-python train2.py --batch_size 4
-python train2.py --lr 1e-4 --batch_size 4
+python train2.py --lr 1e-4 --optimizer adamax
+python train2.py --lr 1e-4 --optimizer sgd

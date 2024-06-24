@@ -33,9 +33,9 @@ parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
 parser.add_argument('--save_folder', default='./weights/', help='Location to save checkpoint models')
-parser.add_argument('--batch_size', default=8, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=4, type=int, help='Batch size for training')
 parser.add_argument('--optimizer', default='adam', help='Optimizer for training')
-parser.add_argument('--total_epoch', default=10, type=int, help='Total epoch for training')
+parser.add_argument('--total_epoch', default=25, type=int, help='Total epoch for training')
 
 args = parser.parse_args()
 
