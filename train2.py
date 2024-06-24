@@ -26,7 +26,7 @@ parser.add_argument('--training_dataset', default='./data/widerface/train/label.
 # parser.add_argument('--validating_dataset', default='./data/widerface/test/label.txt', help='validation dataset directory')
 parser.add_argument('--network', default='resnet50', help='Backbone network mobile0.25 or resnet50')
 parser.add_argument('--num_workers', default=2, type=int, help='Number of workers used in dataloading')
-parser.add_argument('--lr', '--learning-rate', default=1e-5, type=float, help='initial learning rate')
+parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 # parser.add_argument('--resume_net', default=None, help='resume net for retraining')
 # parser.add_argument('--resume_epoch', default=0, type=int, help='resume iter for retraining')

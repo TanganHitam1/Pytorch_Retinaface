@@ -64,17 +64,7 @@ python train2.py --network mobile0.25 --optimizer adam --lr 1e-4 --batch_size 4 
 
 
 
-python train2.py --network mobile0.25
-python train2.py --network mobile0.25 --lr 1e-4
-python train2.py
-python train2.py --lr 1e-4
-
-python train2.py --network mobile0.25 --lr 1e-3
-python train2.py --lr 1e-3
-
-
-python train2.py --network mobile0.25 --lr 1e-2
-python train2.py --lr 1e-2
-
-python train2.py --network mobile0.25 --lr 1e-1
-python train2.py --lr 1e-1
+python train2.py --network mobile0.25 --batch_size 4
+python train2.py --network mobile0.25 --lr 1e-4 --batch_size 4
+python train2.py --batch_size 4
+python train2.py --lr 1e-4 --batch_size 4
