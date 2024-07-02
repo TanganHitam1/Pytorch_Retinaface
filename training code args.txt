@@ -2,6 +2,6 @@ conda activate retinaface
 python train2.py --network mobile0.25 --lr 1e-3 --optimizer adam
 python train2.py --network mobile0.25 --lr 1e-3 --optimizer adamax
 python train2.py --network mobile0.25 --lr 1e-3 --optimizer sgd
-python train2.py --lr 1e-4 --optimizer adam
+python train2.py --lr 1e-4 --optimizer adam --network resnet152
 python train2.py --lr 1e-4 --optimizer adamax
 python train2.py --lr 1e-4 --optimizer sgd

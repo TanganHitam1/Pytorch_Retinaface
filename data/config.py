@@ -38,7 +38,27 @@ cfg_re50 = {
     'decay2': 9,
     'image_size': 840,
     'pretrain': False,
-    'return_layers': {'layer2': 'layer2', 'layer3': 'layer3', 'layer4': 'layer4'},
+    'return_layers': {'layer2': 1, 'layer3': 2, 'layer4': 3},
+    'in_channel': 256,
+    'out_channel': 256
+}
+
+cfg_re152 = {
+    'name': 'Resnet152',
+    'min_sizes': [[16, 32], [64, 128], [256, 512]],
+    'steps': [8, 16, 32],
+    'variance': [0.1, 0.2],
+    'clip': False,
+    'loc_weight': 2.0,
+    'gpu_train': True,
+    'batch_size': 16,
+    'ngpu': 1,
+    'epoch': 10,
+    'decay1': 7,
+    'decay2': 9,
+    'image_size': 840,
+    'pretrain': False,
+    'return_layers': {'layer2': 1, 'layer3': 2, 'layer4': 3},
     'in_channel': 256,
     'out_channel': 256
 }

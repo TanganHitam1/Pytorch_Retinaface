@@ -5,7 +5,7 @@ import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import argparse
 import torch.utils.data as data
-from data import WiderFaceDetection, detection_collate, preproc, cfg_mnet, cfg_re50
+from data import WiderFaceDetection, detection_collate, preproc, cfg_mnet, cfg_re50, cfg_re152
 from layers.modules import MultiBoxLoss
 from layers.functions.prior_box import PriorBox
 import time
@@ -24,7 +24,7 @@ from utils.box_utils import decode
 parser = argparse.ArgumentParser(description='Retinaface Training')
 parser.add_argument('--training_dataset', default='./data/widerface/train/label.txt', help='Training dataset directory')
 # parser.add_argument('--validating_dataset', default='./data/widerface/test/label.txt', help='validation dataset directory')
-parser.add_argument('--network', default='resnet50', help='Backbone network mobile0.25 or resnet50')
+parser.add_argument('--network', default='resnet50', help='Backbone network mobile0.25 or resnet50 or resnet152')
 parser.add_argument('--num_workers', default=2, type=int, help='Number of workers used in dataloading')
 parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
@@ -35,7 +35,7 @@ parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for S
 parser.add_argument('--save_folder', default='./weights/', help='Location to save checkpoint models')
 parser.add_argument('--batch_size', default=4, type=int, help='Batch size for training')
 parser.add_argument('--optimizer', default='adam', help='Optimizer for training')
-parser.add_argument('--total_epoch', default=25, type=int, help='Total epoch for training')
+parser.add_argument('--total_epoch', default=80, type=int, help='Total epoch for training')
 
 args = parser.parse_args()
 
@@ -46,6 +46,8 @@ if args.network == "mobile0.25":
     cfg = cfg_mnet
 elif args.network == "resnet50":
     cfg = cfg_re50
+elif args.network == "resnet152":
+    cfg = cfg_re152
 
 rgb_mean = (104, 117, 123) # bgr order
 num_classes = 2
@@ -67,21 +69,6 @@ save_folder = args.save_folder
 
 net = RetinaFace(cfg=cfg)
 
-# if args.resume_net is not None:
-#     lr = 1e-4
-#     print('Loading resume network...')
-#     state_dict = torch.load(args.resume_net)
-#     from collections import OrderedDict
-#     new_state_dict = OrderedDict()
-#     for k, v in state_dict.items():
-#         head = k[:7]
-#         if head == 'module.':
-#             name = k[7:] # remove `module.`
-#         else:
-#             name = k
-#         new_state_dict[name] = v
-#     net.load_state_dict(new_state_dict)
-
 if num_gpu > 1 and gpu_train:
     net = torch.nn.DataParallel(net).cuda()
 else:
@@ -98,7 +85,7 @@ elif args.optimizer == 'adamax':
 else:
     raise ValueError('Invalid optimizer')
 
-scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[round(max_epoch*.7), round(max_epoch*.9)], gamma=0.1)
+# scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=round(max_epoch*.1), verbose=True)
 
 criterion = MultiBoxLoss(num_classes, 0.35, True, 0, True, 7, 0.35, False)
 
@@ -116,7 +103,7 @@ logger.info('Learning rate: ' + str(initial_lr))
 logger.info('Optimizer: ' + optimizer.__class__.__name__)
 
 curve_path = f'./curve/{name}_epoch{max_epoch}_b{batch_size}_lr{initial_lr}_opt{optimizer.__class__.__name__}'
-weight_path = f'./weights/{name}_epoch{max_epoch}_b{batch_size}_lr{initial_lr}_opt{optimizer.__class__.__name__}/{name}_epoch{max_epoch}_b{batch_size}_lr{initial_lr}_opt{optimizer.__class__.__name__}'
+weight_path = f'./weights/{name}_epoch{max_epoch}_b{batch_size}_lr{initial_lr}_opt{optimizer.__class__.__name__}/'
 
 if not os.path.exists(curve_path):
     os.makedirs(curve_path)
@@ -199,7 +186,9 @@ def compute_iou(box1, box2):
     
     # Intersection over Union
     iou = inter_area / union_area
-    return iou
+    iou_flag = iou > 0.5  # Flag for IoU > 0.5
+    
+    return iou_flag
 
 
 def get_boxes(output, priors, threshold, num_classes):
@@ -242,8 +231,6 @@ def train(epoch):
     train_loader = data.DataLoader(dataset, batch_size=batch_size, sampler=train_sampler, num_workers=num_workers, collate_fn=detection_collate)
     val_loader = data.DataLoader(dataset, batch_size=batch_size, sampler=val_sampler, num_workers=num_workers, collate_fn=detection_collate)
 
-    # epoch_size = math.ceil(len(dataset) / batch_size)
-
     # list_loss_values_train, list_loc_loss_train, list_conf_loss_train, list_landm_loss_train = [], [], [], []
     # list_loss_values_val, list_loc_loss_val, list_conf_loss_val, list_landm_loss_val = [], [], [], []
     # list_acc_train, list_acc_val = [], []
@@ -255,7 +242,15 @@ def train(epoch):
 
     tqdm_epoch = tqdm(range(epoch, max_epoch), desc='Epoch', total=max_epoch, leave=False)
 
+    start = time.time()
+    
     for epoch in tqdm_epoch:
+        if epoch == 5:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = param_group['lr'] * 10
+        elif epoch == 55 or epoch == 68:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = param_group['lr'] * 0.1
 
         acc_train, loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train = 0, 0, 0, 0, 0
         acc_val, loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val = 0, 0, 0, 0, 0
@@ -275,6 +270,7 @@ def train(epoch):
             pred_boxes = get_boxes(out, priors, 0.5, num_classes)
 
             all_ious = []
+            all_flags = []
 
             for idx in range(len(targets)):
                 if idx >= len(pred_boxes):
@@ -288,43 +284,39 @@ def train(epoch):
                     logger.warning(f"No pred_boxes for target {idx}, skipping...")
                     continue
 
-                iou = compute_iou(pred_boxes[idx][0], targets[idx][:, :4])
-                all_ious.append(iou.max(dim=1).values)  # Take the maximum IoU for each predicted box
+                iou_flag = compute_iou(pred_boxes[idx][0], targets[idx][:, :4])
+                
+                all_flags.append(iou_flag.max(dim=1).values)  # Take the maximum IoU flag for each predicted box
 
-            if all_ious:
-                all_ious = torch.cat(all_ious)  # Concatenate all IoUs
-                iou_percentages = all_ious * 100  # Convert IoU to percentage
-                mean_iou_percentage = iou_percentages.mean().item()  # Calculate the mean IoU percentage
+            if all_flags:
+                # all_ious = torch.cat(all_ious)  # Concatenate all IoUs
+                all_flags = torch.cat(all_flags)  # Concatenate all flags
+                all_flags = all_flags * 100
+                # iou_percentages = all_ious * 100  # Convert IoU to percentage
+                # mean_iou_percentage = iou_percentages.mean().item()  # Calculate the mean IoU percentage
+                accuracy = all_flags.float().mean().item()  # Calculate the accuracy based on IoU > 0.5
             else:
-                mean_iou_percentage = 0  # Calculate the mean IoU percentage
-
-            # print(f'Mean IoU Percentage: {mean_iou_percentage:.2f}%')
-            # _, predicted = torch.max(out[1], -1)
-            # total = targets[1].size(0)
-            # correct = (predicted == targets[1]).sum().item()
-            # acc_train += correct / total
+                # mean_iou_percentage = 0  # Calculate the mean IoU percentage
+                accuracy = 0  # Calculate the accuracy based on IoU > 0.5
 
             optimizer.zero_grad()
             (loss_l, loss_c, loss_landm), out = criterion(out, priors, targets)
             loss = cfg['loc_weight'] * loss_l + loss_c + loss_landm
 
-            l2_lambda = 0.001
-            l2_norm = sum(p.pow(2.0).sum() for p in net.parameters())
-            loss = loss + l2_lambda * l2_norm
-            
+            # l2_lambda = 0.001
+            # l2_norm = sum(p.pow(2.0).sum() for p in net.parameters())
+            # loss = loss + l2_lambda * l2_norm
             loss.backward()
             optimizer.step()
-            
 
             loss_values_train += loss.item()
             loc_loss_train += loss_l.item()
             conf_loss_train += loss_c.item()
             landm_loss_train += loss_landm.item()
-            acc_train += mean_iou_percentage
+            acc_train += accuracy
 
             i+=1
-            # tqdm_train.set_postfix_str(f"Loss: {loss.item():.4f}, Acc: {correct / i:.4f}")
-            tqdm_train.set_postfix_str(f"Loss: {loss.item():.4f}, Mean IoU: {mean_iou_percentage:.2f}%")
+            tqdm_train.set_postfix_str(f"Loss: {loss.item():2.2f}, Accuracy: {accuracy:.2f}%")
 
         net.eval()
         with torch.no_grad():
@@ -340,6 +332,7 @@ def train(epoch):
                 pred_boxes = get_boxes(out, priors, 0.5, num_classes)
 
                 all_ious = []
+                all_flags = []
 
                 for idx in range(len(targets)):
                     if idx >= len(pred_boxes):
@@ -351,23 +344,22 @@ def train(epoch):
 
                     if len(pred_boxes[idx][0]) == 0:
                         logger.warning(f"No pred_boxes for target {idx}, skipping...")
-                        all_ious.append(torch.tensor([0.0]).cuda())
                         continue
 
-                    iou = compute_iou(pred_boxes[idx][0], targets[idx][:, :4])
-                    all_ious.append(iou.max(dim=1).values)  # Take the maximum IoU for each predicted box
+                    iou_flag = compute_iou(pred_boxes[idx][0], targets[idx][:, :4])
+                    # all_ious.append(iou.max(dim=1).values)  # Take the maximum IoU for each predicted box
+                    all_flags.append(iou_flag.max(dim=1).values)  # Take the maximum IoU flag for each predicted box
 
-                if all_ious:
-                    all_ious = torch.cat(all_ious)  # Concatenate all IoUs
-                    iou_percentages = all_ious * 100  # Convert IoU to percentage
-                    mean_iou_percentage = iou_percentages.mean().item()  # Calculate the mean IoU percentage
+                if all_flags:
+                    # all_ious = torch.cat(all_ious)  # Concatenate all IoUs
+                    all_flags = torch.cat(all_flags)  # Concatenate all flags
+                    all_flags = all_flags * 100
+                    # iou_percentages = all_ious * 100  # Convert IoU to percentage
+                    # mean_iou_percentage = iou_percentages.mean().item()  # Calculate the mean IoU percentage
+                    accuracy = all_flags.float().mean().item()  # Calculate the accuracy based on IoU > 0.5
                 else:
-                    mean_iou_percentage = 0  # Calculate the mean IoU percentage
-
-                # _, predicted = torch.max(out[1], -1)
-                # total = targets[1].size(0)
-                # correct = (predicted == targets[1]).sum().item()
-                # acc_val += correct / total
+                    # mean_iou_percentage = 0  # Calculate the mean IoU percentage
+                    accuracy = 0  # Calculate the accuracy based on IoU > 0.5
 
                 (loss_l, loss_c, loss_landm), out = criterion(out, priors, targets)
                 loss = cfg['loc_weight'] * loss_l + loss_c + loss_landm
@@ -376,12 +368,12 @@ def train(epoch):
                 loc_loss_val += loss_l.item()
                 conf_loss_val += loss_c.item()
                 landm_loss_val += loss_landm.item()
-                acc_val += mean_iou_percentage
+                acc_val += accuracy
                 i+=1
                 # tqdm_val.set_postfix_str(f"Loss: {loss.item():.4f}, Acc: {correct / i:.4f}")
-                tqdm_val.set_postfix_str(f"Loss: {loss.item():.4f}, Mean IoU: {mean_iou_percentage:.2f}%")
+                tqdm_val.set_postfix_str(f"Loss: {loss.item():2.2f}, Accuracy: {accuracy:.2f}%")
 
-        scheduler.step()
+        # scheduler.step(loss_values_val/len(val_loader))
 
         average_train = avg([loss_values_train, loc_loss_train, conf_loss_train, landm_loss_train, acc_train], len(train_loader))
         average_val = avg([loss_values_val, loc_loss_val, conf_loss_val, landm_loss_val, acc_val], len(val_loader))
@@ -397,12 +389,21 @@ def train(epoch):
             best_acc_val = acc_val
             best_loss_val = loss_values_val
             save_model(net, f"best_{epoch}")
+            torch.save(net.state_dict(), f"{weight_path}Best.pth")
         # if (loss_values_val <= best_loss_val):
         #     best_loss_val = loss_values_val
         #     save_model(net, f"best_{epoch}")
 
-        tqdm_epoch.set_postfix_str(f"Loss: {average_train[0]:.4f}, Val Loss: {average_val[0]:.4f}, Acc: {average_train[-1]:.2f}%, Val Acc: {average_val[-1]:.2f}%")
+        tqdm_epoch.set_postfix_str(f"Loss: {average_train[0]:3.2f}, Val Loss: {average_val[0]:3.2f}, Acc: {average_train[-1]:.2f}%, Val Acc: {average_val[-1]:.2f}%")
     save_model(net, "Final")
+    torch.save(net.state_dict(), f"{weight_path}Final.pth")
+    end = time.time()
+    hours, rem = divmod(end - start, 3600)
+    minutes, seconds = divmod(rem, 60)
+    print(f"Training took {end - start} seconds")
+    with open(f"{weight_path}/time.txt", 'w') as f:
+        f.write(f"Training took {hours:.0f} hours, {minutes:.0f} minutes and {seconds:.0f} seconds")
+        f.close()
     return epoch
 
 def adjust_learning_rate(optimizer, gamma, epoch, step_index, iteration, epoch_size):
