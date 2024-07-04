@@ -142,7 +142,7 @@ if __name__ == '__main__':
         _t['misc'].tic()
         priorbox = PriorBox(cfg, image_size=(im_height, im_width))
         priors = priorbox.forward()
-        priors = priors.to(device)
+        priors = priors.to(device)  
         prior_data = priors.data
         boxes = decode(loc.data.squeeze(0), prior_data, cfg['variance'])
         boxes = boxes * scale / resize
