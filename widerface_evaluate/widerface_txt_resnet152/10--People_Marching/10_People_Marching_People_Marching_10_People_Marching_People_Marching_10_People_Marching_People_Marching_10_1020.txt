@@ -1,0 +1,8 @@
+10_People_Marching_People_Marching_10_People_Marching_People_Marching_10_People_Marching_People_Marching_10_1020
+6
+688 94 37 55 0.9649871 
+315 406 105 119 0.18791664 
+522 279 220 305 0.0875464 
+819 220 132 108 0.03419707 
+21 782 12 14 0.022041287 
+856 225 63 60 0.02151856 

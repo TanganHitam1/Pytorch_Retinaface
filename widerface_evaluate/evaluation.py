@@ -307,8 +307,8 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--gt', default='./ground_truth/')
 
     args = parser.parse_args()
-    names = ["MobileNet0.25", "ResNet50"]
-    pred_paths = ["./widerface_txt_mobile0.25/","./widerface_txt_resnet50/"]
+    names = ["MobileNet0.25", "ResNet152"]
+    pred_paths = ["./widerface_txt_mobile0.25/","./widerface_txt_resnet152/"]
     for i, pred_path in enumerate(pred_paths):
         evaluation(pred_path, args.gt, names[i])
     # evaluation(args.pred, args.gt)

@@ -1,0 +1,3 @@
+2_Demonstration_Political_Rally_2_219
+1
+336 225 381 501 0.9985305 

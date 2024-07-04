@@ -1,0 +1,4 @@
+8_Election_Campain_Election_Campaign_8_25
+2
+588 149 187 267 0.99971527 
+48 232 133 104 0.02381521 

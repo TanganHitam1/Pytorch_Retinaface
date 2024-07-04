@@ -1,10 +1,11 @@
 from __future__ import print_function
 import os
 import argparse
+import time
 import torch
 import torch.backends.cudnn as cudnn
 import numpy as np
-from data import cfg_mnet, cfg_re50
+from data import cfg_mnet, cfg_re50, cfg_re152
 from layers.functions.prior_box import PriorBox
 from utils.nms.py_cpu_nms import py_cpu_nms
 import cv2
@@ -15,9 +16,9 @@ import config_logger
 
 
 parser = argparse.ArgumentParser(description='Retinaface')
-parser.add_argument('-m', '--trained_model', default='./weights/mobilenet0.25_Final.pth',
+parser.add_argument('-m', '--trained_model', default='./weights/mobilenet0.25_epoch80_b4_lr0.001_optSGD/Best.pth',
                     type=str, help='Trained state_dict file path to open')
-parser.add_argument('--network', default='mobile0.25', help='Backbone network mobile0.25 or resnet50')
+parser.add_argument('--network', default='resnet152', help='Backbone network mobile0.25 or resnet50')
 parser.add_argument('--origin_size', default=True, type=str, help='Whether use origin image size to evaluate')
 parser.add_argument('--save_folder', default='./widerface_evaluate/widerface_txt', type=str, help='Dir to save txt results')
 parser.add_argument('--cpu', action="store_true", default=False, help='Use cpu inference')
@@ -74,10 +75,10 @@ if __name__ == '__main__':
     cfg = None
     if args.network == "mobile0.25":
         cfg = cfg_mnet
-        trained_model = './weights/mobilenet0.25_best.pth'
-    elif args.network == "resnet50":
-        cfg = cfg_re50
-        trained_model = './weights/Resnet50_best.pth'
+        trained_model = './weights/mobilenet0.25_epoch80_b4_lr0.001_optSGD/Best.pth'
+    elif args.network == "resnet152":
+        cfg = cfg_re152
+        trained_model = '   ./weights/Resnet152_epoch80_b4_lr0.001_optSGD/Best.pth'
     # net and model
     net = RetinaFace(cfg=cfg, phase = 'test')
     net = load_model(net, trained_model, args.cpu)
@@ -100,7 +101,7 @@ if __name__ == '__main__':
     # logger.info(f"Test dataset: {test_dataset}.")
 
     _t = {'forward_pass': Timer(), 'misc': Timer()}
-
+    start = time.time()
     # testing begin
     for i, img_name in enumerate(test_dataset):
         image_path = testset_folder + img_name
@@ -229,4 +230,9 @@ if __name__ == '__main__':
                 os.makedirs("./results/")
             name = "./results/" + str(i) + ".jpg"
             cv2.imwrite(name, img_raw)
+    end = time.time() - start
+    hours = end // 3600
+    minutes = (end % 3600) // 60
+    seconds = end % 60
+    print(f"Total time: {hours} hours, {minutes} minutes, {seconds} seconds.")
 
